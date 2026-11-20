@@ -1,0 +1,11 @@
+{
+  "name": "lift-log",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Offline-first weight training logger (PWA) with double progression and Google Sheets export",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "serve": "python3 -m http.server 8080"
+  }
+}
