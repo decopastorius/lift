@@ -48,7 +48,8 @@ export function labelSets(sets) {
 export function progressionSets(sets) {
   const logged = (sets || []).filter(isLogged);
   const working = logged.filter((s) => s.type === SET.WORKING);
-  const pool = working.length ? working : logged.filter((s) => s.type === SET.MYO_ACT);
+  let pool = working.length ? working : logged.filter((s) => s.type === SET.MYO_ACT);
+  if (!pool.length) pool = logged.filter((s) => s.type === SET.PARTIAL); // a partials-only exercise
   if (!pool.length) return [];
   const load = Math.max(...pool.map((s) => s.weight || 0));
   return pool.filter((s) => (s.weight || 0) === load);

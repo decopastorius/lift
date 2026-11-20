@@ -18,6 +18,7 @@ export function performance(sets) {
   const logged = (sets || []).filter(isLogged);
   let pool = logged.filter((s) => s.type === SET.WORKING);
   if (!pool.length) pool = logged.filter((s) => s.type === SET.MYO_ACT);
+  if (!pool.length) pool = logged.filter((s) => s.type === SET.PARTIAL);
   if (!pool.length) return null;
   const load = Math.max(...pool.map((s) => s.weight || 0));
   const top = pool.filter((s) => (s.weight || 0) === load);

@@ -2,6 +2,7 @@
 import { SET, SET_NAME, labelSets, isLogged, round } from './progression.js';
 import { suggestionFor } from './session-logic.js';
 import { formatLog, weekOf } from './program.js';
+import { markPartials, DEFAULT_VOLUME } from './muscles.js';
 import { fmtDate, fmtTime, fmtLoad } from './util.js';
 
 export const SET_HEADERS = [
@@ -19,7 +20,8 @@ export const SUMMARY_HEADERS = [
  * @param session finished session
  * @param ctx {exercisesById, locationsById, sessions}
  */
-export function buildPayload(session, { exercisesById, locationsById, sessions }) {
+export function buildPayload(raw, { exercisesById, locationsById, sessions, rules = DEFAULT_VOLUME }) {
+  const session = markPartials(raw, rules); // partials straight after failure are labelled in the log
   const date = fmtDate(session.startedAt);
   const week = weekOf(session, sessions);
   const logs = {};

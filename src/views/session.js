@@ -254,6 +254,15 @@ function SetSheet({ set, label, se, exercise, focus, onPatch, onLog, onClose }) 
       hint=${target != null ? `target ${target}` : `${exercise.repMin}–${exercise.repMax}`} onPick=${(v) => onPick('reps', v)} />
     ${set.type !== SET.MYO_MINI && html`<${PickGroup} name="rir" title="RIR" value=${set.rir} options=${RIR_OPTIONS}
       hint=${se.rir ? `target ${se.rir}` : ''} onPick=${(v) => onPick('rir', v)} />`}
+    ${set.type === SET.PARTIAL && html`<div class="pick-group">
+      <div class="pick-head"><span>Partials done as</span></div>
+      <div class="seg">
+        ${[['', 'Auto'], ['own', 'Own set'], ['after', 'Straight after failure']].map(([v, l]) => html`<button class=${(set.partialMode || '') === v ? 'on' : ''}
+          onClick=${() => onPatch({ partialMode: v || null })}>${l}</button>`)}
+      </div>
+      <small class="muted">Own set (rested, close to failure) counts as a full set. Straight after failure counts like a myo mini-set.
+        Auto: straight after failure if logged within ${(state.settings.volume?.partialRest ?? 30)} s of a set of this exercise.</small>
+    </div>`}
     <div class="log-bar"><button class="btn primary block" onClick=${onLog}>${set.done ? 'Done' : 'Log set ✓'}</button></div>
   <//>`;
   function onPick(field, v) {

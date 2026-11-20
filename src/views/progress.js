@@ -47,7 +47,8 @@ export function ProgressView() {
     <${ExerciseList} items=${result.exercises} />
 
     <p class="muted small">Counting: primary muscle 1 set, secondary ${fmt(rules.secondary)}; a myo-rep activation set 1 and each
-      mini-set ${fmt(Math.round(rules.myoMini * 100) / 100)}; a lengthened-partial set ${fmt(rules.partial)}; sets logged above RIR ${rules.maxRir}
+      mini-set ${fmt(Math.round(rules.myoMini * 100) / 100)}; lengthened partials ${fmt(rules.partial)} as a set of their own,
+      ${fmt(Math.round(rules.partialAfter * 100) / 100)} straight after failure${rules.partialSecondary ? '' : ', main muscle only'}; sets logged above RIR ${rules.maxRir}
       and warm-ups don't count. Change these in More → Volume counting, and an exercise's muscles on its page.</p>
   </div>`;
 }

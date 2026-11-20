@@ -143,7 +143,10 @@ export function formatLog(sets, bodyweight = false) {
     parts.push(`Myo ${loadText(bs[0].weight, bodyweight)} x ${myoNext(bs).total}`);
   }
   const partials = logged.filter((s) => s.type === SET.PARTIAL);
-  if (partials.length) parts.push(`Partials ${groupByLoad(partials, bodyweight)}`);
+  const own = partials.filter((s) => !s.afterFailure);
+  const after = partials.filter((s) => s.afterFailure);
+  if (own.length) parts.push(`Partials ${groupByLoad(own, bodyweight)}`);
+  if (after.length) parts.push(`Partials (after failure) ${groupByLoad(after, bodyweight)}`);
   return parts.join(' | ');
 }
 
@@ -185,7 +188,10 @@ export function parseLog(text) {
       });
       block++;
     } else if (/^partials?\b/i.test(seg)) {
-      out.push(...parseGroups(seg.replace(/^partials?/i, ''), SET.PARTIAL));
+      const after = /\(after failure\)/i.test(seg);
+      const sets = parseGroups(seg.replace(/^partials?/i, '').replace(/\(after failure\)/i, ''), SET.PARTIAL);
+      if (after) for (const x of sets) { x.partialMode = 'after'; x.afterFailure = true; }
+      out.push(...sets);
     } else {
       out.push(...parseGroups(seg, SET.WORKING));
     }

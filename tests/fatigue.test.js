@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { SET } from '../src/progression.js';
-import { musclesFor, setCredit, weeklyVolume, DEFAULT_VOLUME } from '../src/muscles.js';
+import { musclesFor, setCredit, weeklyVolume, markPartials, DEFAULT_VOLUME } from '../src/muscles.js';
+import { formatLog, parseLog } from '../src/program.js';
+import { suggest } from '../src/progression.js';
 import { classify, performance, exposures, exerciseStatus, analyse } from '../src/fatigue.js';
 
 const set = (type, weight, reps, rir = null) => ({ type, weight, reps, rir, done: true });
@@ -17,14 +19,16 @@ test('muscles: guessed from the name, overridable', () => {
   assert.deepEqual(musclesFor({ name: 'Leg Extension', muscles: { primary: ['Quads'], secondary: ['Glutes'] } }).secondary, ['Glutes']);
 });
 
-test('set credit: hard sets only; myo mini-sets and partials count less', () => {
+test('set credit: hard sets only; myo mini-sets and after-failure partials count less', () => {
   assert.equal(setCredit(W(100, 8, 1)), 1);
   assert.equal(setCredit(W(100, 8, null)), 1, 'blank RIR counts');
   assert.equal(setCredit(W(0, 15, 5)), 0, 'RIR 5 is not a hard set');
   assert.equal(setCredit(set(SET.WARMUP, 50, 10)), 0);
   assert.equal(setCredit(set(SET.MYO_ACT, 20, 15)), 1);
   assert.equal(setCredit(set(SET.MYO_MINI, 20, 5)), 1 / 3);
-  assert.equal(setCredit(set(SET.PARTIAL, 20, 8)), 0.5);
+  assert.equal(setCredit(set(SET.PARTIAL, 20, 8)), 1, 'a partial set of its own is a full set');
+  assert.equal(setCredit(set(SET.PARTIAL, 20, 5), DEFAULT_VOLUME, { afterFailure: true }), 1 / 3);
+  assert.equal(setCredit(set(SET.PARTIAL, 20, 8, 6)), 0, 'still has to be hard');
   assert.equal(setCredit(W(0, 15, 5), { ...DEFAULT_VOLUME, maxRir: 5 }), 1);
 });
 
@@ -38,7 +42,7 @@ const session = (id, block, week, startedAt, exercises, extra = {}) => ({
   exercises: Object.entries(exercises).map(([exerciseId, sets]) => ({ id: id + exerciseId, exerciseId, sets })), ...extra,
 });
 
-test('weekly volume per muscle: primary 1, secondary ½, myo and partials fractional', () => {
+test('weekly volume per muscle: primary 1, secondary ½, myo fractional, own-set partials 1', () => {
   const s = [
     session('a', 2, 1, 1, { bench: [W(125, 10, 1), W(125, 9, 0)], row: [W(165, 12, 1), W(165, 12, 0)] }),
     session('b', 2, 1, 2, {
@@ -51,8 +55,8 @@ test('weekly volume per muscle: primary 1, secondary ½, myo and partials fracti
   assert.equal(w1.muscles.Back, 2);
   assert.equal(w1.muscles.Triceps, 1, 'two bench sets x ½');
   assert.equal(w1.muscles.Biceps, 1, 'two row sets x ½');
-  assert.equal(w1.muscles['Side delts'], 2.5, '1 activation + 3 x ⅓ + ½ partial');
-  assert.equal(w1.total, 6.5);
+  assert.equal(w1.muscles['Side delts'], 3, '1 activation + 3 x ⅓ + 1 partial set (no times: own set)');
+  assert.equal(w1.total, 7);
   assert.deepEqual(w1.from.Triceps, { 'Barbell Bench Press': 1 });
   assert.deepEqual([w2.block, w2.week, w2.muscles.Chest], [2, 2, 1]);
 });
@@ -99,4 +103,31 @@ test('alerts: whole-body signal and a muscle with more sets but less progress', 
   const titles = alerts.map((a) => a.title);
   assert.ok(titles.includes('Whole-body fatigue signal'), titles.join(' / '));
   assert.ok(titles.includes('Back: more sets, less progress'), titles.join(' / '));
+});
+
+test('lengthened partials: own set vs straight after failure (by rest, or chosen), main muscle only', () => {
+  const t = (sec) => 1000 * sec;
+  const bench = (id, sets) => ({ id, status: 'done', cycle: 1, week: 1, startedAt: 0, name: 'Upper', exercises: [{ id: 'e', exerciseId: 'bench', sets }] });
+  const S = (type, w, r, at, rest, extra = {}) => ({ id: type + at, type, weight: w, reps: r, rir: 0, done: true, completedAt: t(at), restBefore: rest, ...extra });
+  // set 1, set 2, then 4 partial reps 10 s later (after failure), then a rested partial set
+  const s = bench('a', [S(SET.WORKING, 125, 9, 0, null), S(SET.WORKING, 125, 8, 180, 180), S(SET.PARTIAL, 125, 4, 190, 10), S(SET.PARTIAL, 105, 10, 370, 180)]);
+  const [w] = weeklyVolume([s], ex);
+  assert.equal(w.muscles.Chest, 3.3, 'Chest: 2 full sets + ⅓ (after failure) + 1 (own set), rounded');
+  assert.equal(w.muscles.Triceps, 1, 'secondary muscles: only the 2 full sets x ½');
+  // choosing "own set" overrides the short rest
+  const own = bench('b', [S(SET.WORKING, 125, 9, 0, null), S(SET.PARTIAL, 125, 4, 10, 10, { partialMode: 'own' })]);
+  assert.equal(weeklyVolume([own], ex)[0].muscles.Chest, 2);
+  // partials can count for secondary muscles if you want
+  assert.equal(weeklyVolume([s], ex, { ...DEFAULT_VOLUME, partialSecondary: true })[0].muscles.Triceps, 1.7);
+  // the coach's log says which is which, and reads back
+  const log = formatLog(markPartials(s).exercises[0].sets);
+  assert.equal(log, '125 x 9, 8 | RIR 0, 0 | Partials 105 x 10 | Partials (after failure) 125 x 4');
+  assert.equal(parseLog(log).filter((x) => x.partialMode === 'after').length, 1);
+});
+
+test('an exercise done only as lengthened partials still gets progression', () => {
+  const p = (w, ...reps) => reps.map((r) => ({ type: SET.PARTIAL, weight: w, reps: r, done: true }));
+  const sug = suggest({ repMin: 8, repMax: 12, increment: 5 }, [{ date: 1, sets: p(40, 13, 13) }]);
+  assert.equal(sug.action, 'increase');
+  assert.equal(sug.weight, 45);
 });

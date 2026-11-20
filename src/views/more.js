@@ -351,11 +351,18 @@ function VolumeRules() {
       <div class="row2">
         <${Field} label="Secondary muscle (× set)"><${NumInput} decimal value=${v.secondary} onChange=${set('secondary')} label="Secondary muscle factor" /><//>
         <${Field} label="Myo mini-set (× set)"><${NumInput} decimal value=${Math.round(v.myoMini * 100) / 100} onChange=${set('myoMini')} label="Myo mini-set credit" /><//>
-        <${Field} label="Lengthened partial (× set)"><${NumInput} decimal value=${v.partial} onChange=${set('partial')} label="Partial set credit" /><//>
+        <${Field} label="Partials, own set (× set)"><${NumInput} decimal value=${v.partial} onChange=${set('partial')} label="Partial set credit" /><//>
+        <${Field} label="Partials after failure (× set)"><${NumInput} decimal value=${Math.round(v.partialAfter * 100) / 100} onChange=${set('partialAfter')} label="After-failure partial credit" /><//>
+        <${Field} label="“After failure” if rest ≤ (s)"><${NumInput} value=${v.partialRest} onChange=${set('partialRest')} label="After-failure rest threshold" /><//>
         <${Field} label="Hard set up to RIR"><${NumInput} value=${v.maxRir} onChange=${set('maxRir')} label="Highest RIR that counts" /><//>
         <${Field} label="Typical range from"><${NumInput} value=${v.low} onChange=${set('low')} label="Range low" /><//>
         <${Field} label="to (sets / week)"><${NumInput} value=${v.high} onChange=${set('high')} label="Range high" /><//>
       </div>
+      <${Toggle} checked=${!!v.partialSecondary} onChange=${(x) => saveSettings({ volume: { ...v, partialSecondary: x } })}
+        label="Partials also count for secondary muscles (off: they mostly load the stretched main muscle)" />
+      <p class="muted small">Why: lengthened partials taken close to failure have grown muscle at least as well as full range of
+        motion (leg extensions, calves; 2023 meta-analysis), so a partial set of its own counts as a full set. A few partial reps
+        straight after failure are extra reps, like a myo mini-set.</p>
       <button class="btn small ghost" onClick=${() => saveSettings({ volume: { ...DEFAULT_VOLUME } })}>Reset to defaults</button>
     </div>
   </section>`;

@@ -3,6 +3,7 @@ import { state, save, remove, byId } from '../store.js';
 import { labelSets, SET_NAME } from '../progression.js';
 import { itemsFromSession } from '../session-logic.js';
 import { formatLog, weekOf } from '../program.js';
+import { markPartials, DEFAULT_VOLUME } from '../muscles.js';
 import { NumInput, Field, NoteField, go, Empty, confirmAction, saveBackupFile } from '../components.js';
 import { DEFAULT_NOTE_PRESETS } from '../pickers.js';
 import { fmtClock, fmtNiceDate, fmtTime, uid } from '../util.js';
@@ -10,7 +11,8 @@ import { syncNow, markBackupNeeded, deleteWorkout } from '../sync.js';
 import { begin } from './train.js';
 
 export function HistoryView({ id }) {
-  const s = state.sessions.find((x) => x.id === id);
+  const raw = state.sessions.find((x) => x.id === id);
+  const s = raw && markPartials(raw, { ...DEFAULT_VOLUME, ...(state.settings.volume || {}) });
   if (!s) return html`<${Empty}>Workout not found. <a href="#/">Back</a><//>`;
   const exById = byId(state.exercises);
   const loc = state.locations.find((l) => l.id === s.locationId);

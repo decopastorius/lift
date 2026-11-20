@@ -3,6 +3,7 @@
 // until a push succeeds, and we retry whenever the app is opened or comes online.
 import { state, save, remove, emit, byId, exportBackup, saveBackupState, saveSettings } from './store.js';
 import { buildPayload } from './sheets.js';
+import { DEFAULT_VOLUME } from './muscles.js';
 
 export function pendingSessions() {
   return state.sessions.filter((s) => s.status === 'done' && s.syncState !== 'synced');
@@ -35,7 +36,7 @@ export async function syncNow() {
   let ok = true;
   const ctx = {
     exercisesById: byId(state.exercises), locationsById: byId(state.locations), sessions: state.sessions,
-    templates: state.templates, layout: state.settings.program || [],
+    rules: { ...DEFAULT_VOLUME, ...(state.settings.volume || {}) },
   };
   for (const s of todo) {
     try {
