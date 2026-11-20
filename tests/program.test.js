@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { SET } from '../src/progression.js';
 import {
-  formatLog, parseLog, parseProgramPaste, parseColumnPaste, restSeconds, programRows, defaultLayout, nextWeek, weekOf,
+  formatLog, parseLog, parseProgramPaste, parseColumnPaste, restSeconds, defaultLayout, nextWeek, weekOf,
 } from '../src/program.js';
 import { seedLocations, seedExercises, seedTemplates } from '../src/seed.js';
 import { planImport } from '../src/importer.js';
@@ -64,14 +64,6 @@ test('seeded templates follow the h / c / hc tags', () => {
   assert.equal(cottage('Lower 1').items.length, 3);
   assert.equal(home('Upper 1').items[0].restMin, '3-4');
   assert.equal(home('Upper 1').items[0].rir, '0-1');
-
-  const rows = programRows({ workout: 'Upper 1', templates: t, locations: locs, exercisesById: Object.fromEntries(ex.map((e) => [e.id, e])) });
-  assert.equal(rows.length, 9);
-  assert.deepEqual(rows.find((r) => r.name.startsWith('Standing Curl')).tag, 'hc');
-  assert.deepEqual(rows.find((r) => r.name === 'Seated Row (cable)'), {
-    exerciseId: rows.find((r) => r.name === 'Seated Row (cable)').exerciseId,
-    name: 'Seated Row (cable)', sets: 2, reps: '8-10', rir: '0-1', progression: 'Double', rest: '3-4', tag: 'h',
-  });
 });
 
 // A made-up block in the sheet's layout (tab-separated, as copied from Google Sheets).
@@ -121,17 +113,14 @@ test('import creates templates, exercises and history; progression uses it', () 
   assert.equal(again.sessions.length, 0);
   assert.equal(again.templates[0].id, plan.templates[0].id);
 
-  // and the export writes the same cell back
+  // and the export sends the same text back for the log tab
   const exById = Object.fromEntries([...exercises, ...plan.exercises].map((e) => [e.id, e]));
   const payload = buildPayload(s1, {
-    exercisesById: exById, locationsById: Object.fromEntries(locations.map((l) => [l.id, l])),
-    sessions: plan.sessions, templates: plan.templates, layout: plan.layout,
+    exercisesById: exById, locationsById: Object.fromEntries(locations.map((l) => [l.id, l])), sessions: plan.sessions,
   });
-  assert.equal(payload.program.workout, 'Upper A');
-  assert.equal(payload.program.week, 1);
-  assert.equal(payload.program.duration, "40'");
-  assert.equal(payload.program.rows.find((r) => r.name === 'Seated Row (cable)').log, '150 x 11, 11 | RIR 1, 0');
-  assert.equal(payload.program.rows.find((r) => r.name === 'Chest Supported DB Row').log, '');
+  assert.deepEqual([payload.log.workout, payload.log.week, payload.log.location], ['Upper A', 1, 'Home']);
+  assert.equal(payload.log.rows.find((r) => r.name === 'Seated Row (cable)').log, '150 x 11, 11 | RIR 1, 0');
+  assert.ok(!payload.log.rows.some((r) => r.name === 'Chest Supported DB Row'), 'only exercises done');
 });
 
 // One week's column, values only, as copied from the sheet (made-up numbers, real layout shape):
@@ -174,14 +163,6 @@ test('importing a week column: history at Home, dated back from the last workout
   assert.equal(nextWeek('Upper 1', plan.sessions), 8);
   const ab = plan.sessions[1].exercises.at(-1);
   assert.equal(formatLog(ab.sets, true), 'BW x 15, 15 | RIR 5, 5');
-
-  // the layout keeps the sheet's row order for the export
-  const rows = programRows({
-    workout: 'Upper 1', templates: seedTemplates(locations, exercises), locations,
-    exercisesById: Object.fromEntries(exercises.map((e) => [e.id, e])), layout: defaultLayout(),
-  });
-  assert.deepEqual(rows.slice(0, 2).map((r) => [r.tag, r.name]), [['c', 'Chest Supported DB Row'], ['h', 'Seated Row (cable)']]);
-  assert.equal(rows.length, 9);
 });
 
 test('a column without a "Week N" line asks for the week', () => {

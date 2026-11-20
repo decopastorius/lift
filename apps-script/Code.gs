@@ -15,22 +15,20 @@
  *
  * What it writes:
  *  - "Summary" and "Sets" tabs: raw data, one row per exercise / per set.
- *  - The coach's layout: a tab per block ("Block 1", "Block 2", ... = cycle 1, 2, ... in the app).
- *    In it, each workout has a table found by its header row:
- *        [tag] Upper 1 | Sets | Reps | Reps In Reserve | Progression | Rest Time (Min.) | Week 1 ... Week 7
- *    and a deload table (with its own rows) whose header has "Week 8". Each workout goes in the
- *    exercise's row, under its "Week N" column, as "165 x 12, 12 | RIR 1, 0"; the session time
- *    goes in the row under the table. A missing block tab is copied from TEMPLATE_TAB.
- *    Re-sending a workout replaces its cells (the cell note remembers which workout wrote it).
+ *  - A log tab per block: "Block 2 log", "Block 3 log", ... One row per exercise (column A),
+ *    "Week N" columns along the top. An exercise done twice in a week fills a second "Week N"
+ *    column (added when needed), so location and session don't matter. Each cell holds the coach's
+ *    format, "165 x 12, 12 | RIR 1, 0"; its note says when/where, plus your notes for the coach.
+ *    Re-sending or deleting a workout updates or clears its own cells.
  *  - A full backup of the app's data in the Drive folder below after every workout.
+ *  The coach's own tabs ("Block 1", "Block 2", ...) are only read, never changed.
  *
  * It also lets the app read the Block tabs and the equipment-settings tab ("Import from Google Sheet").
  */
 const SECRET = 'change-me';
-const SCRIPT_VERSION = 4;                   // the app checks this to tell you when the script needs updating
+const SCRIPT_VERSION = 5;                   // the app checks this to tell you when the script needs updating
 const SHEET_ID = '';                         // only for a standalone script project; leave empty otherwise
-const BLOCK_TAB = 'Block ';                  // "Block 1", "Block 2", ...
-const TEMPLATE_TAB = 'example new block';    // copied to create the next block's tab
+const LOG_TAB = (block) => 'Block ' + block + ' log';   // where workouts are written
 const SETTINGS_TAB = '_Workout_Equipment_Settings';
 const BACKUP_FOLDER = 'Lift Log backups';
 const KEEP_BACKUPS = 30;
@@ -59,7 +57,7 @@ function doPost(e) {
     if (data.action === 'delete') return reply(deleteSession(ss, data.sessionId, data.texts || []));
     upsert(ss, 'Summary', data.summaryHeaders, data.summary, data.sessionId);
     upsert(ss, 'Sets', data.setHeaders, data.sets, data.sessionId);
-    if (data.program) writeProgram(ss, data.program, data.sessionId);
+    if (data.log) writeLog(ss, data.log, data.sessionId);
     return reply({ ok: true, sheet: ss.getName() });
   } catch (err) {
     return reply({ ok: false, error: String(err) });
@@ -149,107 +147,63 @@ function deleteSession(ss, sessionId, texts) {
   return { ok: true, cleared: cleared };
 }
 
-// ---------- coach's layout ----------
+// ---------- log tab: a row per exercise, "Week N" columns ----------
 
 const norm = (v) => String(v == null ? '' : v).trim().toLowerCase().replace(/\s+/g, ' ');
-const isSets = (v) => norm(v) === 'sets';
+const weekOf = (header) => Number((String(header).match(/^\s*week\s*(\d+)/i) || [])[1]) || null;
 
-/** Every table for this workout in a tab: header row, name column, week columns, rows by name. */
-function findTables(sh, workout) {
-  const lastRow = sh.getLastRow();
-  const lastCol = sh.getLastColumn();
-  if (!lastRow || !lastCol) return [];
-  const vals = sh.getRange(1, 1, lastRow, lastCol + 1).getDisplayValues();
-  const out = [];
-  for (let r = 0; r < vals.length; r++) {
-    for (let c = 0; c < vals[r].length - 1; c++) {
-      if (norm(vals[r][c]) !== norm(workout) || !isSets(vals[r][c + 1])) continue;
-      const weeks = {};
-      let end = c + 1;
-      for (let k = c + 2; k < vals[r].length; k++) {
-        if (k > c + 2 && isSets(vals[r][k + 1])) break; // the next table on this row
-        const m = String(vals[r][k]).match(/^\s*week\s*(\d+)\s*$/i);
-        if (m) weeks[Number(m[1])] = k + 1;
-        if (String(vals[r][k]).trim()) end = k;
-      }
-      const rows = {};
-      let last = r + 1;
-      for (let i = r + 1; i < vals.length; i++) {
-        if (isSets(vals[i][c + 1])) break;
-        const name = String(vals[i][c]).trim();
-        if (!name) continue;
-        rows[norm(name)] = i + 1;
-        last = i + 1;
-      }
-      out.push({ sh: sh, header: r + 1, nameCol: c + 1, first: Math.max(1, c), lastCol: end + 1, weeks: weeks, rows: rows, last: last });
-    }
-  }
-  return out;
-}
-
-/** The block's tab: existing, else a copy of the template, else a new empty tab. */
-function blockSheet(ss, cycle) {
-  const name = BLOCK_TAB + (cycle || 1);
+function logSheet(ss, block) {
+  const name = LOG_TAB(block || 1);
   let sh = ss.getSheetByName(name);
-  if (sh) return sh;
-  const tpl = ss.getSheetByName(TEMPLATE_TAB);
-  if (tpl) {
-    sh = tpl.copyTo(ss);
-    sh.setName(name);
-    clearWeeks(sh);
-    return sh;
+  if (!sh) {
+    sh = ss.insertSheet(name);
+    sh.getRange(1, 1).setValue('Exercise').setFontWeight('bold');
+    sh.setFrozenRows(1);
+    sh.setFrozenColumns(1);
   }
-  return ss.insertSheet(name);
+  return sh;
 }
 
-/** A new block starts empty: clear the week cells of every table (example rows are kept). */
-function clearWeeks(sh) {
-  const lastRow = sh.getLastRow();
-  const lastCol = sh.getLastColumn();
-  if (!lastRow || !lastCol) return;
-  const vals = sh.getRange(1, 1, lastRow, lastCol + 1).getDisplayValues();
-  for (let r = 0; r < vals.length; r++) {
-    for (let c = 0; c < vals[r].length - 1; c++) {
-      if (!String(vals[r][c]).trim() || !isSets(vals[r][c + 1]) || isSets(vals[r][c])) continue;
-      const t = findTables(sh, vals[r][c]).filter((x) => x.header === r + 1 && x.nameCol === c + 1)[0];
-      if (!t) continue;
-      for (const w of Object.keys(t.weeks)) {
-        for (let i = t.header + 1; i <= t.last + 1; i++) {
-          if (/^example/i.test(String((vals[i - 1] || [])[c] || '').trim())) continue;
-          const cell = sh.getRange(i, t.weeks[w]);
-          if (String(cell.getDisplayValue()).trim()) { cell.clearContent(); cell.setNote(''); }
-        }
-      }
-    }
+/** The exercise's row (column A), added at the bottom the first time. */
+function exerciseRow(sh, name) {
+  const last = sh.getLastRow();
+  if (last > 1) {
+    const names = sh.getRange(2, 1, last - 1, 1).getDisplayValues();
+    for (let i = 0; i < names.length; i++) if (norm(names[i][0]) === norm(name)) return i + 2;
   }
-}
-
-function createTable(sh, p) {
-  const start = sh.getLastRow() ? sh.getLastRow() + 2 : 1;
-  const values = [['', p.workout, 'Sets', 'Reps', 'Reps In Reserve', 'Progression', 'Rest Time (Min.)']]
-    .concat(p.rows.map((r) => [r.tag, r.name, r.sets, r.reps, r.rir, r.progression, r.rest]));
-  const range = sh.getRange(start, 1, values.length, 7);
-  range.setNumberFormat('@'); // keep "8-10" from turning into a date
-  range.setValues(values);
-  sh.getRange(start, 1, 1, 7).setFontWeight('bold');
-  return findTables(sh, p.workout)[0];
-}
-
-/** Column for week N in a table: its "Week N" header, else a new header after the last one. */
-function weekColumn(t, week) {
-  if (t.weeks[week]) return t.weeks[week];
-  const cols = Object.keys(t.weeks).map((w) => t.weeks[w]);
-  let col = cols.length ? Math.max.apply(null, cols) + 1 : Math.max(t.lastCol + 1, t.nameCol + 6);
-  while (String(t.sh.getRange(t.header, col).getDisplayValue()).trim()) col++;
-  t.sh.getRange(t.header, col).setValue('Week ' + week).setFontWeight('bold');
-  t.weeks[week] = col;
-  if (col > t.lastCol) t.lastCol = col;
-  return col;
+  const row = Math.max(last, 1) + 1;
+  sh.getRange(row, 1).setNumberFormat('@').setValue(name);
+  return row;
 }
 
 /**
- * Write a log cell. Your notes for the coach go in the cell's note (hover to read), followed by
- * a "lift-log:<id>" line that remembers which workout wrote it, so a re-send replaces it.
+ * The column for this workout's entry in this week: the cell it wrote before (re-send), else the
+ * first free "Week N" column in the row, else a new "Week N" column right after the others.
+ */
+function weekSlot(sh, row, week, label, tag) {
+  const width = Math.max(sh.getLastColumn(), 1);
+  const header = sh.getRange(1, 1, 1, width).getDisplayValues()[0];
+  const cols = [];
+  let after = 1; // insert new columns after the last column of an earlier or same week
+  for (let c = 2; c <= width; c++) {
+    const w = weekOf(header[c - 1]);
+    if (w === week) cols.push(c);
+    if (w != null && w <= week) after = c;
+  }
+  if (cols.length) {
+    const notes = sh.getRange(row, cols[0], 1, cols[cols.length - 1] - cols[0] + 1).getNotes()[0];
+    const vals = sh.getRange(row, cols[0], 1, cols[cols.length - 1] - cols[0] + 1).getDisplayValues()[0];
+    for (const c of cols) if (String(notes[c - cols[0]] || '').indexOf(tag) !== -1) return c;
+    for (const c of cols) if (!String(vals[c - cols[0]] || '').trim()) return c;
+  }
+  sh.insertColumnAfter(after);
+  sh.getRange(1, after + 1).setValue(label).setFontWeight('bold');
+  return after + 1;
+}
+
+/**
+ * Write a log cell. The note says when/where and carries your notes for the coach, then a
+ * "lift-log:<id>" line that remembers which workout wrote it, so a re-send replaces it.
  */
 function writeCell(range, text, sessionId, comment) {
   const tag = 'lift-log:' + sessionId;
@@ -263,48 +217,24 @@ function writeCell(range, text, sessionId, comment) {
     range.setValue(text);
     range.setNote(newNote);
   } else if (current === text && !mine) {
-    // same value from another workout (e.g. the same session time): share the cell
     range.setNote(note + '\n' + newNote);
   } else if (!mine) {
-    // a second workout in the same week: keep both
     range.setValue(current + '\n' + text);
     range.setNote(note ? note + '\n' + newNote : newNote);
   }
 }
 
-function writeProgram(ss, p, sessionId) {
-  if (!p || !p.workout) return;
-  const sh = blockSheet(ss, p.cycle);
-  const tables = findTables(sh, p.workout);
-  // the table that has this week's column (week 8 lives in the deload table), else the main one
-  let t = tables.filter((x) => x.weeks[p.week])[0]
-    || tables.sort((a, b) => Object.keys(b.weeks).length - Object.keys(a.weeks).length)[0]
-    || createTable(sh, p);
-  // exercises the table doesn't list yet (e.g. created mid-workout): insert a row inside the
-  // table's own columns only, so tables beside it don't move
+function writeLog(ss, p, sessionId) {
+  if (!p || !p.rows) return;
+  const sh = logSheet(ss, p.block);
+  const tag = 'lift-log:' + sessionId;
+  const label = 'Week ' + p.week + (p.deload ? ' (deload)' : '');
+  const when = [p.date, p.workout, p.location].filter(String).join(' · ');
   for (const r of p.rows) {
-    if (!r.log || t.rows[norm(r.name)]) continue;
-    const width = t.lastCol - t.first + 1;
-    sh.getRange(t.last + 1, t.first, 1, width).insertCells(SpreadsheetApp.Dimension.ROWS);
-    const cells = sh.getRange(t.last + 1, t.nameCol - 1, 1, 2);
-    cells.setNumberFormat('@');
-    cells.setValues([[r.tag || '', r.name]]);
-    const header = sh.getRange(t.header, t.nameCol, 1, width).getDisplayValues()[0].map(norm);
-    const put = (label, v) => { const k = header.indexOf(label); if (k > 0) sh.getRange(t.last + 1, t.nameCol + k).setNumberFormat('@').setValue(v); };
-    put('sets', String(r.sets || ''));
-    put('reps', r.reps || '');
-    put('reps in reserve', r.rir || '');
-    put('progression', r.progression || '');
-    put('rest time (min.)', r.rest || '');
-    t = findTables(sh, p.workout).filter((x) => x.header === t.header && x.nameCol === t.nameCol)[0];
-  }
-  const col = weekColumn(t, p.week);
-  for (const r of p.rows) {
-    if (r.log && t.rows[norm(r.name)]) writeCell(sh.getRange(t.rows[norm(r.name)], col), r.log, sessionId, r.note);
-  }
-  // session time goes in the row right under the table, if that row is free
-  if (p.duration && !String(sh.getRange(t.last + 1, t.nameCol).getDisplayValue()).trim()) {
-    writeCell(sh.getRange(t.last + 1, col), p.duration, sessionId, p.note);
+    if (!r.log) continue;
+    const row = exerciseRow(sh, r.name);
+    const col = weekSlot(sh, row, p.week, label, tag);
+    writeCell(sh.getRange(row, col), r.log, sessionId, when + (r.note ? '\n' + r.note : ''));
   }
 }
 

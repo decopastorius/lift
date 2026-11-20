@@ -32,14 +32,14 @@ whenever you're online, but logging never depends on the sheet.
   - A `Summary` tab with one row per exercise per workout, plus the suggested target for next time.
   - A `Sets` tab with one row per set.
   - Editing a past workout re-sends it, replacing its rows instead of duplicating them.
-- **Coach's program sheet**: each workout is written into the coach's layout. That's the workout's block (e.g. "Upper 1"), the exercise's row, and the "Week N" column, as `165 x 12, 12 | RIR 1, 0` (`70 x 20, 85 x 12` when the load changes, `BW x 15, 15` for bodyweight). The session time (`42'`) goes in the row under the block. The block is found by name in any tab, so an existing sheet works as long as the exercise names match; otherwise a `Program` tab is created.
+- **Coach's sheet log**: each workout is written to a log tab per block ("Block 2 log", "Block 3 log", ...). It has a row per exercise and "Week N" columns along the top, in the coach's format `165 x 12, 12 | RIR 1, 0`. An exercise done twice in a week gets a second "Week N" column, so where you trained or how sessions were split doesn't matter. Each cell's note says when and where, plus your notes. The coach's own "Block N" tabs are only read (for the import), never changed.
 - **Program and templates**: Upper 1, Lower 1 and Upper 2 come preloaded for Home and Cottage (from the sheet's h / c / hc tags). Each item has its sets, rep range, target RIR and rest range. The rest timer goes off at the low end of the range.
 - **Import from the coach's sheet** (More → Coach's program sheet):
   - paste the program straight from Google Sheets;
   - it updates exercises, rep ranges and templates;
   - weeks already logged become history, so progression starts from real numbers;
   - **or paste just one week's column** (values only, with the "Week N" lines); the values are lined up with the program's rows using the h / c tags, and the preview shows exactly where each one went.
-- **Blocks and deload**: 8-week blocks (adjustable in More). Week 8 is a deload: same exercises and sets, RIR 3–4 on everything, last loads, and it doesn't count toward progression. Then week 1 of the next block. In the coach's sheet each block is its own tab ("Block 1", "Block 2", ...); a new block's tab is copied from the coach's "example new block" template.
+- **Blocks and deload**: 8-week blocks (adjustable in More). Week 8 is a deload: same exercises and sets, RIR 3–4 on everything, last loads, and it doesn't count toward progression. Then week 1 of the next block, written to the next "Block N log" tab.
 - **Import from Google Sheet** (More → Coach's program sheet): reads every "Block N" tab (all logged weeks, deloads included) and the equipment-settings tab through the script, and turns them into history, the program, templates and per-location exercise setups. Running it again replaces what it imported before.
 - **Weeks**: a week is one round of the program. Each workout gets the week after the last one logged with the same name (e.g. Upper 1 after week 7 → week 8). You can change it at the top of the workout or in its history page.
 - **Every finished workout is automatically**:

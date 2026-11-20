@@ -163,7 +163,9 @@ test('full session flow: plan, log, myo, superset rest, finish, sheet rows', () 
   assert.ok(payload.summary.every((r) => r.length === SUMMARY_HEADERS.length));
   assert.equal(payload.summary[0][5], 45);
   assert.equal(payload.summary[2][8], 'Myo 25 x 15+5+3');
-  assert.equal(payload.program.duration, "45'");
+  assert.deepEqual(payload.log.rows.map((r) => r.name), ['DB Bench', 'Pull-up', 'Curl']);
+  assert.equal(payload.log.rows[2].log, 'Myo 25 x 15+5+3');
+  assert.deepEqual([payload.log.block, payload.log.week], [1, 1]);
   assert.equal(historyFor('bench', [prior, s]).length, 2);
 });
 

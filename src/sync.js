@@ -52,7 +52,7 @@ export async function syncNow() {
   for (const s of ok ? deletions : []) {
     try {
       const p = buildPayload(s, ctx);
-      const texts = [...p.program.rows.map((r) => r.log).filter(Boolean), p.program.duration].filter(Boolean);
+      const texts = p.log.rows.map((r) => r.log).filter(Boolean);
       await postToSheet(sheetUrl, { app: 'lift-log', action: 'delete', sessionId: s.id, texts, secret: sheetSecret });
       await remove('sessions', s.id);
     } catch (e) {
@@ -85,7 +85,7 @@ export function markBackupNeeded() {
 }
 
 /** Read the coach's Block tabs and equipment settings through the script (for the import). */
-export const SCRIPT_VERSION = 4;
+export const SCRIPT_VERSION = 5;
 export const UPDATE_SCRIPT_HELP = 'The Google script this URL runs is an older version. In Apps Script: paste the new script, Save, then Deploy → Manage deployments → ✏️ Edit → Version: “New version” → Deploy. (A “New deployment” makes a new URL; if you did that, paste the new URL here.)';
 
 export async function readCoachSheet() {

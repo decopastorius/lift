@@ -1,7 +1,7 @@
 // Build the rows sent to Google Sheets. Pure — the network call lives in sync.js.
 import { SET, SET_NAME, labelSets, isLogged, round } from './progression.js';
 import { suggestionFor } from './session-logic.js';
-import { formatLog, programRows, weekOf } from './program.js';
+import { formatLog, weekOf } from './program.js';
 import { fmtDate, fmtTime, fmtLoad } from './util.js';
 
 export const SET_HEADERS = [
@@ -17,9 +17,9 @@ export const SUMMARY_HEADERS = [
 
 /**
  * @param session finished session
- * @param ctx {exercisesById, locationsById, sessions, templates, layout}
+ * @param ctx {exercisesById, locationsById, sessions}
  */
-export function buildPayload(session, { exercisesById, locationsById, sessions, templates = [], layout = [] }) {
+export function buildPayload(session, { exercisesById, locationsById, sessions }) {
   const date = fmtDate(session.startedAt);
   const week = weekOf(session, sessions);
   const logs = {};
@@ -63,15 +63,14 @@ export function buildPayload(session, { exercisesById, locationsById, sessions, 
     ]);
   });
 
-  // The coach's layout: a block per workout, a row per exercise, a column per week.
-  const locations = Object.values(locationsById);
-  const deloadRir = session.deload ? session.exercises.find((e) => e.rir)?.rir || '3-4' : null;
-  const rows = programRows({ workout: session.name, templates, locations, exercisesById, session, layout })
-    .map((r) => ({ ...r, rir: deloadRir || r.rir, log: logs[r.exerciseId] || '', note: notes[r.exerciseId] || '' }));
-  const minutes = session.endedAt ? Math.round((session.endedAt - session.startedAt) / 60000) : 0;
-  const program = {
-    workout: session.name, week, cycle: session.cycle || 1, deload: !!session.deload, duration: minutes ? `${minutes}'` : '', note: session.notes || '',
-    rows: rows.map(({ tag, name, sets, reps, rir, progression, rest, log, note }) => ({ tag, name, sets, reps, rir, progression, rest, log, note })),
+  // The log tab for this block: a row per exercise, "Week N" columns (repeated when an exercise
+  // is done more than once that week). One entry per exercise done in this workout.
+  const log = {
+    block: session.cycle || 1, week, deload: !!session.deload, workout: session.name, date, location: loc,
+    rows: session.exercises
+      .filter((e) => logs[e.exerciseId])
+      .filter((e, i, all) => all.findIndex((x) => x.exerciseId === e.exerciseId) === i)
+      .map((e) => ({ name: exercisesById[e.exerciseId]?.name || '(deleted exercise)', log: logs[e.exerciseId], note: notes[e.exerciseId] || '' })),
   };
 
   return {
@@ -81,6 +80,6 @@ export function buildPayload(session, { exercisesById, locationsById, sessions, 
     summaryHeaders: SUMMARY_HEADERS,
     sets,
     summary,
-    program,
+    log,
   };
 }

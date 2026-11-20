@@ -173,9 +173,10 @@ function CoachSheet() {
   return html`<section>
     <h2>Coach's program sheet</h2>
     <div class="card form">
-      <p class="muted small">Each workout is written into the coach's layout: its block (${layout.map((b) => b.name).join(', ') || 'e.g. Upper 1'}),
-        the exercise's row and the “Week N” column, as <code>165 x 12, 12 | RIR 1, 0</code>, with the session time under the block.
-        A week is one round of the program; each workout gets the week after the last one logged (you can change it on the workout).</p>
+      <p class="muted small">Each workout is written to a log tab per block (“Block 2 log”, “Block 3 log”…): a row per exercise,
+        “Week N” columns along the top (a second column when an exercise is done twice that week), as <code>165 x 12, 12 | RIR 1, 0</code>.
+        The coach's own Block tabs are only read. A week is one round of the program; each workout gets the week after the last one
+        logged (you can change it on the workout).</p>
       <div class="row2">
         <${Field} label="Weeks per block" hint="The last week is the deload."><${NumInput} value=${state.settings.cycleWeeks || 8} label="Weeks per block" onChange=${(v) => v && saveSettings({ cycleWeeks: v })} /><//>
         <${Field} label="Deload RIR"><input value=${state.settings.deloadRir || '3-4'} onInput=${(e) => saveSettings({ deloadRir: e.target.value })} /><//>
