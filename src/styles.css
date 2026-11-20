@@ -240,3 +240,8 @@ textarea { resize: vertical; }
 .status-card .ok { color: var(--good); font-weight: 600; }
 .status-card .bad { color: var(--danger); }
 .status-card .btn { align-self: flex-start; }
+
+.rx { font-size: .82rem; color: var(--muted); margin: -2px 0 6px; }
+.log-line { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .85rem; margin: 4px 0 8px; color: var(--muted); }
+.import-preview { font-size: .88rem; }
+.import-preview li { margin: 2px 0; }

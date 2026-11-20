@@ -10,6 +10,13 @@ export function fmtDate(ts) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+/** Monday of the week containing ts, as YYYY-MM-DD. */
+export function mondayOf(ts) {
+  const d = new Date(ts);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return fmtDate(d.getTime());
+}
+
 export function fmtTime(ts) {
   const d = new Date(ts);
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`;

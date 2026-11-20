@@ -161,8 +161,9 @@ test('full session flow: plan, log, myo, superset rest, finish, sheet rows', () 
   assert.equal(payload.sets.length, 2 + 1 + 3);
   assert.ok(payload.sets.every((r) => r.length === SET_HEADERS.length));
   assert.ok(payload.summary.every((r) => r.length === SUMMARY_HEADERS.length));
-  assert.equal(payload.summary[0][4], 45);
-  assert.equal(payload.summary[2][10], '25: 15+5+3');
+  assert.equal(payload.summary[0][5], 45);
+  assert.equal(payload.summary[2][8], 'Myo 25 x 15+5+3');
+  assert.equal(payload.program.duration, "45'");
   assert.equal(historyFor('bench', [prior, s]).length, 2);
 });
 
@@ -200,7 +201,8 @@ test('starter library is valid', async () => {
   const { seedExercises } = await import('../src/seed.js');
   const list = seedExercises();
   assert.equal(list.length, 20);
+  assert.ok(list.find((e) => e.name === 'Pull-Ups/Chin-Ups'));
   assert.equal(new Set(list.map((e) => e.name)).size, list.length);
   for (const e of list) assert.ok(e.repMin < e.repMax && e.increment > 0, e.name);
-  assert.ok(list.find((e) => e.name === 'Pull-Ups / Chin-Ups').bodyweight);
+  assert.ok(list.find((e) => e.name === 'Pull-Ups/Chin-Ups').bodyweight);
 });

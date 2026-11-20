@@ -27,6 +27,13 @@ whenever you're online, but logging never depends on the sheet.
   - A `Summary` tab with one row per exercise per workout, plus the suggested target for next time.
   - A `Sets` tab with one row per set.
   - Editing a past workout re-sends it, replacing its rows instead of duplicating them.
+- **Coach's program sheet**: each workout is written into the coach's layout. That's the workout's block (e.g. "Upper 1"), the exercise's row, and the "Week N" column, as `165 x 12, 12 | RIR 1, 0` (`70 x 20, 85 x 12` when the load changes, `BW x 15, 15` for bodyweight). The session time (`42'`) goes in the row under the block. The block is found by name in any tab, so an existing sheet works as long as the exercise names match; otherwise a `Program` tab is created.
+- **Program and templates**: Upper 1, Lower 1 and Upper 2 come preloaded for Home and Cottage (from the sheet's h / c / hc tags). Each item has its sets, rep range, target RIR and rest range. The rest timer goes off at the low end of the range.
+- **Import from the coach's sheet** (More → Coach's program sheet):
+  - paste the program straight from Google Sheets;
+  - it updates exercises, rep ranges and templates;
+  - weeks already logged become history, so progression starts from real numbers;
+  - set "Week 1 started on" so new workouts land in the right week column.
 - **Every finished workout is automatically**:
   - **exported to the Google Sheet**, and
   - **backed up to Google Drive**: a full JSON backup in a `Lift Log backups` folder, one file per day, last 30 days kept.

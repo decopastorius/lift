@@ -2,6 +2,7 @@
 import { SET, isLogged, suggest } from './progression.js';
 import { myoNext, blockSets } from './myo.js';
 import { uid } from './util.js';
+import { restSeconds } from './program.js';
 
 export const DEFAULT_SETTINGS = {
   id: 'settings',
@@ -14,6 +15,7 @@ export const DEFAULT_SETTINGS = {
   keepAwake: true,
   sheetUrl: '',
   sheetSecret: '',
+  programStart: '',     // YYYY-MM-DD of week 1 in the coach's sheet
 };
 
 export function newSet(type, extra = {}) {
@@ -21,7 +23,7 @@ export function newSet(type, extra = {}) {
 }
 
 export function newPlanItem(exerciseId, settings = DEFAULT_SETTINGS) {
-  return { id: uid(), exerciseId, warmups: 0, sets: 3, myo: 0, partials: 0, rest: settings.defaultRest, group: '' };
+  return { id: uid(), exerciseId, warmups: 0, sets: 2, myo: 0, partials: 0, rest: settings.defaultRest, restMin: '', rir: '', group: '' };
 }
 
 /** History of one exercise across all finished sessions, oldest -> newest. */
@@ -56,7 +58,9 @@ export function buildSessionExercise(item, exercise, suggestion) {
     id: uid(),
     exerciseId: exercise.id,
     group: item.group || '',
-    rest: item.rest || null,
+    rest: restSeconds(item.restMin) || item.rest || null,
+    rir: item.rir || '',
+    restMin: item.restMin || '',
     plan: { warmups: item.warmups || 0, sets: item.sets || 0, myo: item.myo || 0, partials: item.partials || 0 },
     sets,
     notes: '',
@@ -84,7 +88,7 @@ export function startSession({ template, locationId, exercisesById, sessions, se
       .map((it) => {
         const ex = exercisesById[it.exerciseId];
         return buildSessionExercise(
-          { ...it, rest: it.rest || settings.defaultRest },
+          { ...it, rest: restSeconds(it.restMin) || it.rest || settings.defaultRest },
           ex,
           suggestionFor(ex, sessions),
         );
@@ -248,6 +252,8 @@ export function itemsFromSession(session, settings = DEFAULT_SETTINGS) {
       myo: done ? count(SET.MYO_ACT) : e.plan?.myo || 0,
       partials: done ? count(SET.PARTIAL) : e.plan?.partials || 0,
       rest: e.rest || settings.defaultRest,
+      restMin: e.restMin || '',
+      rir: e.rir || '',
       group: e.group || '',
     };
   });

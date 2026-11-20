@@ -1,7 +1,7 @@
 // In-memory app state mirrored to IndexedDB. Writes are debounced per record.
 import * as db from './db.js';
 import { DEFAULT_SETTINGS } from './session-logic.js';
-import { seedLocations, seedExercises } from './seed.js';
+import { seedLocations, seedExercises, seedTemplates } from './seed.js';
 
 export const state = {
   ready: false,
@@ -39,9 +39,11 @@ export async function load() {
     // first run
     state.locations = seedLocations();
     state.exercises = seedExercises();
+    state.templates = seedTemplates(state.locations, state.exercises);
     await db.put('kv', state.settings);
     for (const l of state.locations) await db.put('locations', l);
     for (const e of state.exercises) await db.put('exercises', e);
+    for (const t of state.templates) await db.put('templates', t);
   }
   state.ready = true;
   emit();

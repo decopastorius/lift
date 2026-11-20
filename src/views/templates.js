@@ -3,6 +3,7 @@ import { state, save, remove, byId } from '../store.js';
 import { newPlanItem } from '../session-logic.js';
 import { Field, Stepper, NumInput, ExercisePicker, go, Empty, confirmAction } from '../components.js';
 import { uid } from '../util.js';
+import { restSeconds } from '../program.js';
 import { begin } from './train.js';
 
 export function TemplatesView() {
@@ -74,7 +75,9 @@ export function TemplateEditor({ id }) {
           <span>Working sets</span><${Stepper} label="working sets" value=${it.sets} onChange=${(v) => setItem(i, { sets: v })} />
           <span>Myo-rep sets</span><${Stepper} label="myo-rep sets" value=${it.myo} max=${5} onChange=${(v) => setItem(i, { myo: v })} />
           <span>Lengthened partial sets</span><${Stepper} label="partial sets" value=${it.partials} onChange=${(v) => setItem(i, { partials: v })} />
-          <span>Rest (sec)</span><${NumInput} value=${it.rest} label="Rest seconds" onChange=${(v) => setItem(i, { rest: v })} />
+          <span>Target RIR</span><input class="num" value=${it.rir || ''} placeholder="e.g. 0-1" aria-label="Target RIR" onInput=${(e) => setItem(i, { rir: e.target.value })} />
+          <span>Rest (min)</span><input class="num" value=${it.restMin || (it.rest ? String(it.rest / 60) : '')} placeholder="e.g. 3-4" aria-label="Rest minutes"
+            onInput=${(e) => setItem(i, { restMin: e.target.value, rest: restSeconds(e.target.value) })} />
           <span>Superset</span>
           <div class="seg">${['', 'A', 'B', 'C', 'D'].map((g) => html`<button class=${(it.group || '') === g ? 'on' : ''} onClick=${() => setItem(i, { group: g })}>${g || '–'}</button>`)}</div>
         </div>

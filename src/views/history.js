@@ -2,6 +2,7 @@ import { html } from '../vendor/preact-htm.js';
 import { state, save, remove, byId } from '../store.js';
 import { labelSets, SET_NAME } from '../progression.js';
 import { itemsFromSession } from '../session-logic.js';
+import { formatLog, weekNumber } from '../program.js';
 import { NumInput, Field, go, Empty, confirmAction, saveBackupFile } from '../components.js';
 import { fmtClock, fmtNiceDate, fmtTime, uid } from '../util.js';
 import { syncNow, markBackupNeeded } from '../sync.js';
@@ -38,7 +39,7 @@ export function HistoryView({ id }) {
   return html`<div class="page">
     <a class="back" href="#/">‹ Train</a>
     <h1>${s.name}</h1>
-    <p class="muted">${fmtNiceDate(s.startedAt)} ${fmtTime(s.startedAt)} · ${loc?.name || ''} · ${fmtClock(((s.endedAt || s.startedAt) - s.startedAt) / 1000)}</p>
+    <p class="muted">Week ${weekNumber(s.startedAt, state.settings.programStart)} · ${fmtNiceDate(s.startedAt)} ${fmtTime(s.startedAt)} · ${loc?.name || ''} · ${fmtClock(((s.endedAt || s.startedAt) - s.startedAt) / 1000)}</p>
     <${AfterWorkout} s=${s} />
     <div class="row2">
       <button class="btn primary" onClick=${repeat}>Repeat workout</button>
@@ -56,6 +57,7 @@ export function HistoryView({ id }) {
       const labels = labelSets(e.sets);
       return html`<section class="card">
         <h3><a href=${'#/exercises/' + e.exerciseId}>${ex.name}</a>${e.group ? html` <small class="muted">Superset ${e.group}</small>` : ''}</h3>
+        ${e.sets.length > 0 && html`<p class="log-line">${formatLog(e.sets, !!ex.bodyweight)}</p>`}
         ${e.sets.length === 0 && html`<p class="muted">Skipped</p>`}
         <div class="sets">
           ${e.sets.length > 0 && html`<div class="set-row head hist"><span>Set</span><span>lb</span><span>Reps</span><span>RIR</span><span>Rest</span><span></span></div>`}

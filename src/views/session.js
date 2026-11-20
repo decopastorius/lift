@@ -168,6 +168,11 @@ function ExerciseCard({ s, se, idx, exercise, locationId, update }) {
         ? html`<span>${[setup.equipment, setup.settings].filter(Boolean).join(' · ')}</span>`
         : html`<span class="muted">Add equipment setup</span>`}
     </button>
+    <div class="rx">${[
+      `${se.plan?.sets || se.sets.filter((x) => x.type === SET.WORKING).length} × ${exercise.repMin}–${exercise.repMax}`,
+      se.rir && `RIR ${se.rir}`,
+      se.restMin ? `rest ${se.restMin} min` : se.rest && `rest ${fmtClock(se.rest)}`,
+    ].filter(Boolean).join(' · ')}</div>
     <${Target} sug=${se.suggestion} exercise=${exercise} />
     <div class="sets">
       <div class="set-row head"><span>Set</span><span>${exercise.bodyweight ? '+lb' : 'lb'}</span><span>Reps</span><span>RIR</span><span></span><span></span></div>
