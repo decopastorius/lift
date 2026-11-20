@@ -14,7 +14,7 @@ import { uid } from './util.js';
  * @param data {locations, exercises, templates, sessions}
  * @param opts {layout, lastDate: 'YYYY-MM-DD' of the last workout in the paste, week: used when the paste has no "Week N"}
  */
-export function planImport(text, { locations, exercises, templates, sessions }, { layout, lastDate, week: fallbackWeek = null }) {
+export function planImport(text, { locations, exercises, templates, sessions }, { layout, lastDate, week: fallbackWeek = null, cycleWeeks = 8 }) {
   const warnings = [];
   const exByName = Object.fromEntries(exercises.map((e) => [norm(e.name), e]));
   const exChanged = new Map();
@@ -109,7 +109,7 @@ export function planImport(text, { locations, exercises, templates, sessions }, 
     if (!exs.length) continue;
     const tpl = [...outTemplates, ...templates].find((t) => norm(t.name) === norm(b.workout) && t.locationId === loc?.id);
     outSessions.push({
-      id: uid(), status: 'done', importKey: key, week: b.week, templateId: tpl?.id || null, name: block?.name || b.workout,
+      id: uid(), status: 'done', importKey: key, week: b.week, cycle: 1, deload: b.week === cycleWeeks, templateId: tpl?.id || null, name: block?.name || b.workout,
       locationId: loc?.id || null, startedAt, endedAt: startedAt + (b.duration ? b.duration * 60000 : 0),
       lastSetAt: null, restTarget: null, restLabel: '', notes: `Imported from the coach's sheet (week ${b.week}).`,
       syncState: 'synced', // already in the sheet

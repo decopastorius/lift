@@ -82,7 +82,9 @@ function SessionHeader({ s, loc, onFinish, update }) {
         <select class="sh-loc" aria-label="Location" value=${s.locationId || ''} onChange=${(e) => update({ ...s, locationId: e.target.value })}>
           ${state.locations.map((l) => html`<option value=${l.id}>${l.name}</option>`)}
         </select>
-        <label class="wk">Wk <${NumInput} value=${s.week} label="Week" onChange=${(v) => v && update({ ...s, week: v }, 300)} /></label>
+        ${(s.cycle || 1) > 1 && html`<span>C${s.cycle}</span>`}
+        <label class="wk">Wk <${NumInput} value=${s.week} label="Week" onChange=${(v) => v && update({ ...s, week: v, deload: v === (state.settings.cycleWeeks || 8) }, 300)} /></label>
+        ${s.deload && html`<span class="badge">Deload</span>`}
         <span>· ${done} set${done === 1 ? '' : 's'}</span>
         ${s.lastSetAt && html`<span>· last set ${fmtClock((now - s.lastSetAt) / 1000)} ago</span>`}
       </div>
@@ -122,9 +124,16 @@ function RestBar({ s, update }) {
   </div>`;
 }
 
-function Target({ sug, exercise }) {
+function Target({ sug, exercise, deload }) {
   if (!sug) return null;
   const last = sug.last;
+  if (deload) {
+    return html`<div class="target deload">
+      <strong>Deload: ${last ? fmtLoad(last.load, exercise.bodyweight) : 'usual load'}, stop at RIR ${state.settings.deloadRir || '3-4'}</strong>
+      <span>Same exercises and sets, lighter effort. Doesn't count toward progression.</span>
+      ${last && html`<small>Last (${fmtNiceDate(last.date)}): ${fmtLoad(last.load, exercise.bodyweight)} × ${last.reps.join(', ')}</small>`}
+    </div>`;
+  }
   return html`<div class=${'target ' + sug.action}>
     ${sug.action === 'increase' && html`<strong>↑ ${fmtLoad(sug.weight, exercise.bodyweight)} × ${sug.targets[0]}+</strong>`}
     ${sug.action === 'hold' && html`<strong>${fmtLoad(sug.weight, exercise.bodyweight)} → ${sug.targets.join(' · ')}</strong>`}
@@ -173,7 +182,7 @@ function ExerciseCard({ s, se, idx, exercise, locationId, update }) {
       se.restMin && `rest ${se.restMin} min`,
       se.rest && `timer ${fmtClock(se.rest)}`,
     ].filter(Boolean).join(' · ')}</div>
-    <${Target} sug=${se.suggestion} exercise=${exercise} />
+    <${Target} sug=${se.suggestion} exercise=${exercise} deload=${s.deload} />
     <button class="setup-line" onClick=${() => setSetupOpen(true)}>
       ⚙ ${setup && (setup.equipment || setup.settings)
         ? html`<span>${[setup.equipment, setup.settings].filter(Boolean).join(' · ')}</span>`

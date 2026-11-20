@@ -134,3 +134,15 @@ test('deleting a workout removes its rows and its cells', () => {
   assert.equal(coach.v[2][7], '', 'session time cleared too');
   assert.equal(ss.getSheetByName('Sets').getLastRow(), 1);
 });
+
+test('cycle 2 goes to its own "Cycle 2" tab, week 1 again', () => {
+  const coach = new Sheet('Sheet1', [H, ['h', 'Seated Row (cable)', 2, '8-10', '0-1', 'Double', '3-4', '165 x 12, 12']]);
+  const { ss, post } = load([coach]);
+  post(payload('c2', { ...program(1, '170 x 10, 10'), cycle: 2 }));
+  assert.equal(coach.v[1][7], '165 x 12, 12', 'cycle 1 untouched');
+  const c2 = ss.getSheetByName('Cycle 2');
+  assert.equal(c2.v[0][7], 'Week 1');
+  assert.equal(c2.v[2][7], '170 x 10, 10');
+  post(payload('c2b', { ...program(2, '170 x 11, 10'), cycle: 2 }));
+  assert.equal(c2.v[2][8], '170 x 11, 10', 'week 2 of cycle 2 lands next to it');
+});

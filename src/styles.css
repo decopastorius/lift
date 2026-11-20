@@ -273,3 +273,7 @@ textarea { resize: vertical; }
 .connected { background: var(--good-bg); color: var(--good); padding: 8px 10px; border-radius: 8px; font-size: .9rem; margin: 0 0 6px; }
 .title-row h2 { margin-bottom: .5rem; }
 .title-row a.small { font-size: .9rem; }
+
+.badge { background: var(--warn-bg); color: var(--text); border-radius: 999px; padding: 1px 8px; font-size: .75rem; font-weight: 700; }
+.target.deload { background: var(--warn-bg); }
+.script-links { display: flex; gap: 8px; margin: 6px 0; flex-wrap: wrap; }

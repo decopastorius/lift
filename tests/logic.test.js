@@ -225,3 +225,32 @@ test('rest timer defaults: 3:00 compound, 1:30 isolation', async () => {
   });
   assert.deepEqual(s.exercises.map((e) => e.rest), [180, 180, 90, 90, 90]);
 });
+
+test('8-week cycle: week 8 is a deload, then week 1 of the next cycle', async () => {
+  const { nextSlot } = await import('../src/program.js');
+  const done = (week, t, extra = {}) => ({ id: 'u' + t, status: 'done', name: 'Upper 1', week, startedAt: t, exercises: [], ...extra });
+  assert.deepEqual(nextSlot('Upper 1', [done(7, 1)]), { week: 8, cycle: 1, deload: true });
+  assert.deepEqual(nextSlot('Upper 1', [done(7, 1), done(8, 2, { deload: true })]), { week: 1, cycle: 2, deload: false });
+  assert.deepEqual(nextSlot('Upper 1', [done(8, 2, { cycle: 2 }), done(1, 3, { cycle: 3 })]), { week: 2, cycle: 3, deload: false });
+  assert.deepEqual(nextSlot('Upper 1', []), { week: 1, cycle: 1, deload: false });
+});
+
+test('deload workout: last load, RIR 3-4, no rep targets, and it does not count toward progression', () => {
+  const w7 = { id: 'w7', status: 'done', name: 'Upper 1', week: 7, cycle: 1, startedAt: 10,
+    exercises: [{ id: 'x', exerciseId: 'bench', sets: w(50, 13, 13) }] };
+  const tpl = { id: 't', name: 'Upper 1', items: [{ id: 'i', exerciseId: 'bench', sets: 2, rir: '1-2' }] };
+  const s = startSession({ template: tpl, exercisesById: { bench: ex }, sessions: [w7], settings: DEFAULT_SETTINGS });
+  assert.equal(s.week, 8);
+  assert.equal(s.deload, true);
+  const e = s.exercises[0];
+  assert.equal(e.rir, '3-4');
+  assert.equal(e.sets[0].weight, 50, 'last load, not the +5 increase');
+  assert.equal(e.sets[0].target, null);
+
+  // a deload at the same load that "hits the top" must not trigger an increase or count as a session
+  const deload = { ...w7, id: 'w8', week: 8, deload: true, startedAt: 20, exercises: [{ id: 'y', exerciseId: 'bench', sets: w(50, 8, 8) }] };
+  const next = startSession({ template: tpl, exercisesById: { bench: ex }, sessions: [w7, deload], settings: DEFAULT_SETTINGS });
+  assert.deepEqual([next.week, next.cycle, next.deload], [1, 2, false]);
+  assert.equal(next.exercises[0].suggestion.action, 'increase', 'based on week 7, ignoring the deload');
+  assert.equal(next.exercises[0].rir, '1-2');
+});

@@ -82,6 +82,16 @@ function SheetSettings() {
       <p class="muted small">Optional. Logging works without it. Finished workouts queue up and sync when you’re online.
         Setup steps are in the README (Apps Script → Deploy as web app).</p>
       ${st.sheetUrl && st.sheetName && html`<p class="connected">Logging to Google Sheet <strong>“${st.sheetName}”</strong></p>`}
+      <div class="script-links">
+        <a class="btn small" href="https://github.com/decopastorius/lift/blob/main/apps-script/Code.gs" target="_blank" rel="noopener">Open the script</a>
+        <button class="btn small" onClick=${async () => {
+          try {
+            const code = await (await fetch('apps-script/Code.gs', { cache: 'no-store' })).text();
+            await navigator.clipboard.writeText(code);
+            setMsg('Script copied. Paste it into Extensions → Apps Script in your sheet.');
+          } catch (e) { setMsg('✗ Couldn’t copy (are you online?). Use “Open the script”.'); }
+        }}>Copy the script</button>
+      </div>
       <${Field} label="Web app URL" hint="The URL belongs to the sheet you installed the script in (Extensions → Apps Script in that sheet). To log to another sheet, install the script there and paste its URL.">
         <input type="url" value=${st.sheetUrl} placeholder="https://script.google.com/macros/s/…/exec"
           onInput=${(e) => saveSettings({ sheetUrl: e.target.value.trim(), sheetName: '' })} /><//>
@@ -160,6 +170,10 @@ function CoachSheet() {
       <p class="muted small">Each workout is written into the coach's layout: its block (${layout.map((b) => b.name).join(', ') || 'e.g. Upper 1'}),
         the exercise's row and the “Week N” column, as <code>165 x 12, 12 | RIR 1, 0</code>, with the session time under the block.
         A week is one round of the program; each workout gets the week after the last one logged (you can change it on the workout).</p>
+      <div class="row2">
+        <${Field} label="Weeks per cycle" hint="The last week is the deload."><${NumInput} value=${state.settings.cycleWeeks || 8} label="Weeks per cycle" onChange=${(v) => v && saveSettings({ cycleWeeks: v })} /><//>
+        <${Field} label="Deload RIR"><input value=${state.settings.deloadRir || '3-4'} onInput=${(e) => saveSettings({ deloadRir: e.target.value })} /><//>
+      </div>
       <button class="btn block" onClick=${() => setImporting(true)}>Import from the coach's sheet</button>
       <p class="muted small">Paste either the whole program (header rows + week columns) to update exercises, rep ranges, templates
         and history, or just one week's column (values only) to add that week as history.</p>
@@ -174,7 +188,7 @@ function ImportSheet({ onClose }) {
   const [week, setWeek] = useState(null);
   const [done, setDone] = useState('');
   const layout = state.settings.program || [];
-  const plan = text.trim() ? planImport(text, state, { layout, lastDate, week }) : null;
+  const plan = text.trim() ? planImport(text, state, { layout, lastDate, week, cycleWeeks: state.settings.cycleWeeks || 8 }) : null;
   const locName = byId(state.locations);
   const exName = byId(state.exercises);
   const nameOf = (id) => exName[id]?.name || plan?.exercises.find((e) => e.id === id)?.name || '?';

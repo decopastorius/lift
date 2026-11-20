@@ -19,6 +19,8 @@
  *           (row under the block)                               | 42'
  * The block is found by workout name in ANY tab (so your existing sheet works as long as the
  * exercise names match); if it isn't found it is created in the PROGRAM_TAB tab.
+ * After a deload, a new cycle starts again at Week 1: cycle 2+ is written to its own tab,
+ * "Cycle 2", "Cycle 3"... with the same layout, so earlier weeks are never overwritten.
  *
  * After each workout the app also sends a full backup, saved as a JSON file in the
  * Drive folder below (one file per day; the newest KEEP_BACKUPS are kept).
@@ -161,8 +163,13 @@ function findBlock(sh, workout) {
   return null;
 }
 
+function programTabName(p) {
+  return (p.cycle || 1) > 1 ? 'Cycle ' + p.cycle : PROGRAM_TAB;
+}
+
 function createBlock(ss, p) {
-  const sh = ss.getSheetByName(PROGRAM_TAB) || ss.insertSheet(PROGRAM_TAB);
+  const name = programTabName(p);
+  const sh = ss.getSheetByName(name) || ss.insertSheet(name);
   const start = sh.getLastRow() ? sh.getLastRow() + 2 : 1;
   const values = [['', p.workout, 'Sets', 'Reps', 'Reps In Reserve', 'Progression', 'Rest Time (Min.)']]
     .concat(p.rows.map((r) => [r.tag, r.name, r.sets, r.reps, r.rir, r.progression, r.rest]));
@@ -222,10 +229,15 @@ function writeCell(range, text, sessionId, comment) {
 function writeProgram(ss, p, sessionId) {
   if (!p || !p.workout) return;
   let block = null;
-  for (const sh of ss.getSheets()) {
-    if (sh.getName() === 'Summary' || sh.getName() === 'Sets') continue;
-    block = findBlock(sh, p.workout);
-    if (block) break;
+  if ((p.cycle || 1) > 1) {
+    const sh = ss.getSheetByName(programTabName(p));
+    if (sh) block = findBlock(sh, p.workout);
+  } else {
+    for (const sh of ss.getSheets()) {
+      if (sh.getName() === 'Summary' || sh.getName() === 'Sets' || /^Cycle \d+$/.test(sh.getName())) continue;
+      block = findBlock(sh, p.workout);
+      if (block) break;
+    }
   }
   if (!block) block = createBlock(ss, p);
   // add exercises the block doesn't have yet (e.g. created mid-workout)

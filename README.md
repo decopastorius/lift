@@ -39,6 +39,7 @@ whenever you're online, but logging never depends on the sheet.
   - it updates exercises, rep ranges and templates;
   - weeks already logged become history, so progression starts from real numbers;
   - **or paste just one week's column** (values only, with the "Week N" lines); the values are lined up with the program's rows using the h / c tags, and the preview shows exactly where each one went.
+- **Cycles and deload**: 8-week cycles (adjustable in More). Week 8 is a deload: same exercises and sets, RIR 3–4 on everything, last loads, and it doesn't count toward progression. Then week 1 of the next cycle. In the coach's sheet, cycle 2+ goes to its own tab ("Cycle 2", ...) so earlier weeks are never overwritten.
 - **Weeks**: a week is one round of the program. Each workout gets the week after the last one logged with the same name (e.g. Upper 1 after week 7 → week 8). You can change it at the top of the workout or in its history page.
 - **Every finished workout is automatically**:
   - **exported to the Google Sheet**, and
@@ -65,7 +66,7 @@ by default (More → Rest timer).
 The app never signs in to Google. The script below is installed *inside* one spreadsheet, and its web-app URL writes to that spreadsheet, running as you. Install it in the coach's sheet, which you need edit access to. More → Google Sheet then shows which sheet you're logging to.
 
 1. Create a Google Sheet and share it with your coach.
-2. In the sheet: **Extensions → Apps Script**. Replace `Code.gs` with [`apps-script/Code.gs`](apps-script/Code.gs).
+2. In the sheet: **Extensions → Apps Script**. Replace `Code.gs` with [`apps-script/Code.gs`](apps-script/Code.gs) (or in the app: More → Google Sheet → **Copy the script**).
 3. Change `const SECRET = 'change-me'` to a passphrase of your choice, then save.
 4. **Deploy → New deployment**, choose type **Web app**:
    - Execute as: **Me**

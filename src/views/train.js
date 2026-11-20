@@ -1,7 +1,7 @@
 import { html, useState } from '../vendor/preact-htm.js';
 import { state, save, byId, activeSession } from '../store.js';
 import { startSession } from '../session-logic.js';
-import { nextWeek } from '../program.js';
+import { nextSlot } from '../program.js';
 import { go, Empty, confirmAction } from '../components.js';
 import { fmtClock, fmtNiceDate } from '../util.js';
 import { pendingSessions, syncNow } from '../sync.js';
@@ -10,6 +10,10 @@ import { unlockAudio } from '../device.js';
 const LOC_KEY = 'liftlog.location';
 const getLoc = () => { try { return localStorage.getItem(LOC_KEY) || ''; } catch { return ''; } };
 const setLocStore = (v) => { try { localStorage.setItem(LOC_KEY, v); } catch { /* ignore */ } };
+
+function slotText(x) {
+  return `${x.cycle > 1 ? `cycle ${x.cycle}, ` : ''}week ${x.week}${x.deload ? ' (deload)' : ''}`;
+}
 
 export function begin(template, locationId) {
   unlockAudio();
@@ -62,7 +66,7 @@ export function TrainView() {
         return html`<div class="card tpl-row">
           <a class="tpl-info" href=${'#/templates/' + t.id}>
             <strong>${t.name}</strong>
-            <small>${locName[t.locationId]?.name || 'Any'} · ${t.items.length} exercises · week ${nextWeek(t.name, state.sessions)} next${last ? ' · last ' + fmtNiceDate(last) : ''}</small>
+            <small>${locName[t.locationId]?.name || 'Any'} · ${t.items.length} exercises · ${slotText(nextSlot(t.name, state.sessions, state.settings.cycleWeeks || 8))} next${last ? ' · last ' + fmtNiceDate(last) : ''}</small>
           </a>
           <button class="btn primary" onClick=${() => begin(t)}>Start</button>
         </div>`;

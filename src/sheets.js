@@ -69,7 +69,7 @@ export function buildPayload(session, { exercisesById, locationsById, sessions, 
     .map((r) => ({ ...r, log: logs[r.exerciseId] || '', note: notes[r.exerciseId] || '' }));
   const minutes = session.endedAt ? Math.round((session.endedAt - session.startedAt) / 60000) : 0;
   const program = {
-    workout: session.name, week, duration: minutes ? `${minutes}'` : '', note: session.notes || '',
+    workout: session.name, week, cycle: session.cycle || 1, deload: !!session.deload, duration: minutes ? `${minutes}'` : '', note: session.notes || '',
     rows: rows.map(({ tag, name, sets, reps, rir, progression, rest, log, note }) => ({ tag, name, sets, reps, rir, progression, rest, log, note })),
   };
 

@@ -79,10 +79,26 @@ export function weekOf(session, sessions = []) {
     && norm(s.name) === norm(session.name) && s.startedAt < session.startedAt).length;
 }
 
-/** Week for the next workout with this name: one after the latest one logged. */
-export function nextWeek(name, sessions) {
-  const done = sessions.filter((s) => s.status === 'done' && norm(s.name) === norm(name));
-  return done.length ? Math.max(...done.map((s) => weekOf(s, sessions))) + 1 : 1;
+export const cycleOf = (session) => session.cycle || 1;
+
+/**
+ * Where the next workout with this name falls: the week after the most recent one, wrapping to
+ * week 1 of the next cycle after the last (deload) week.
+ */
+export function nextSlot(name, sessions, cycleWeeks = 8) {
+  const done = sessions
+    .filter((s) => s.status === 'done' && norm(s.name) === norm(name))
+    .sort((a, b) => a.startedAt - b.startedAt);
+  const last = done.at(-1);
+  if (!last) return { week: 1, cycle: 1, deload: cycleWeeks === 1 };
+  const w = weekOf(last, sessions);
+  const slot = w >= cycleWeeks ? { week: 1, cycle: cycleOf(last) + 1 } : { week: w + 1, cycle: cycleOf(last) };
+  return { ...slot, deload: slot.week === cycleWeeks };
+}
+
+/** Week number for the next workout with this name. */
+export function nextWeek(name, sessions, cycleWeeks = 8) {
+  return nextSlot(name, sessions, cycleWeeks).week;
 }
 
 /** Noon, `daysBefore` days before a YYYY-MM-DD date. */

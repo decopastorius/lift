@@ -2,13 +2,15 @@
 import { SET, isLogged, suggest } from './progression.js';
 import { myoNext, blockSets } from './myo.js';
 import { uid } from './util.js';
-import { defaultLayout, nextWeek } from './program.js';
+import { defaultLayout, nextSlot } from './program.js';
 import { DEFAULT_NOTE_PRESETS } from './pickers.js';
 
 export const DEFAULT_SETTINGS = {
   id: 'settings',
   unit: 'lb',
   defaultRest: 120,      // fallback only
+  cycleWeeks: 8,         // weeks per cycle; the last one is the deload week
+  deloadRir: '3-4',      // target RIR on every exercise in the deload week
   compoundRest: 180,     // timer between sets of compound movements
   isolationRest: 90,     // timer between sets of isolation movements
   warmupRest: 60,
@@ -33,7 +35,7 @@ export function newPlanItem(exerciseId, settings = DEFAULT_SETTINGS) {
 /** History of one exercise across all finished sessions, oldest -> newest. */
 export function historyFor(exerciseId, sessions, { before = Infinity, excludeId = null } = {}) {
   return sessions
-    .filter((s) => s.status === 'done' && s.id !== excludeId && s.startedAt <= before)
+    .filter((s) => s.status === 'done' && !s.deload && s.id !== excludeId && s.startedAt <= before) // deloads don't count
     .sort((a, b) => a.startedAt - b.startedAt)
     .map((s) => {
       const sets = s.exercises.filter((e) => e.exerciseId === exerciseId).flatMap((e) => e.sets);
@@ -59,10 +61,11 @@ export function restFor(exercise, settings = DEFAULT_SETTINGS, item = {}) {
   return isCompound(exercise) ? settings.compoundRest || 180 : settings.isolationRest || 90;
 }
 
-export function buildSessionExercise(item, exercise, suggestion, settings = DEFAULT_SETTINGS) {
-  const w = suggestion?.weight ?? (exercise.bodyweight ? 0 : null);
+export function buildSessionExercise(item, exercise, suggestion, settings = DEFAULT_SETTINGS, deload = false) {
+  // deload: keep the last load, no rep targets
+  const w = (deload ? suggestion?.last?.load ?? suggestion?.weight : suggestion?.weight) ?? (exercise.bodyweight ? 0 : null);
   const tgt = (i) => {
-    const t = suggestion?.targets || [];
+    const t = deload ? [] : suggestion?.targets || [];
     return t.length ? t[Math.min(i, t.length - 1)] : null;
   };
   const sets = [];
@@ -75,7 +78,7 @@ export function buildSessionExercise(item, exercise, suggestion, settings = DEFA
     exerciseId: exercise.id,
     group: item.group || '',
     rest: restFor(exercise, settings, item),
-    rir: item.rir || '',
+    rir: deload ? settings.deloadRir || '3-4' : item.rir || '',
     restMin: item.restMin || '',
     plan: { warmups: item.warmups || 0, sets: item.sets || 0, myo: item.myo || 0, partials: item.partials || 0 },
     sets,
@@ -86,12 +89,15 @@ export function buildSessionExercise(item, exercise, suggestion, settings = DEFA
 
 export function startSession({ template, locationId, exercisesById, sessions, settings, now = Date.now() }) {
   const items = template ? template.items : [];
+  const slot = nextSlot(template?.name || 'Workout', sessions, settings.cycleWeeks || 8);
   return {
     id: uid(),
     status: 'active',
     templateId: template?.id || null,
     name: template?.name || 'Workout',
-    week: nextWeek(template?.name || 'Workout', sessions),
+    week: slot.week,
+    cycle: slot.cycle,
+    deload: slot.deload,
     locationId: template?.locationId || locationId || null,
     startedAt: now,
     endedAt: null,
@@ -104,7 +110,7 @@ export function startSession({ template, locationId, exercisesById, sessions, se
       .filter((it) => exercisesById[it.exerciseId])
       .map((it) => {
         const ex = exercisesById[it.exerciseId];
-        return buildSessionExercise(it, ex, suggestionFor(ex, sessions), settings);
+        return buildSessionExercise(it, ex, suggestionFor(ex, sessions), settings, slot.deload);
       }),
   };
 }
