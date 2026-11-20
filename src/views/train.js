@@ -12,7 +12,7 @@ const getLoc = () => { try { return localStorage.getItem(LOC_KEY) || ''; } catch
 const setLocStore = (v) => { try { localStorage.setItem(LOC_KEY, v); } catch { /* ignore */ } };
 
 function slotText(x) {
-  return `${x.cycle > 1 ? `cycle ${x.cycle}, ` : ''}week ${x.week}${x.deload ? ' (deload)' : ''}`;
+  return `${x.cycle > 1 ? `Block ${x.cycle}, ` : ''}week ${x.week}${x.deload ? ' (deload)' : ''}`;
 }
 
 export function begin(template, locationId) {

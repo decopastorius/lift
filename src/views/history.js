@@ -40,7 +40,7 @@ export function HistoryView({ id }) {
   return html`<div class="page">
     <a class="back" href="#/history">‹ History</a>
     <h1>${s.name}</h1>
-    <p class="muted"><label class="wk">${(s.cycle || 1) > 1 ? `Cycle ${s.cycle} · ` : ''}Week <${NumInput} value=${weekOf(s, state.sessions)} label="Week" onChange=${(v) => v && update({ ...s, week: v, deload: v === (state.settings.cycleWeeks || 8) })} /></label>${s.deload ? html` <span class="badge">Deload</span>` : ''} · ${fmtNiceDate(s.startedAt)} ${fmtTime(s.startedAt)} · ${loc?.name || ''} · ${fmtClock(((s.endedAt || s.startedAt) - s.startedAt) / 1000)}</p>
+    <p class="muted"><label class="wk">${(s.cycle || 1) > 1 ? `Block ${s.cycle} · ` : ''}Week <${NumInput} value=${weekOf(s, state.sessions)} label="Week" onChange=${(v) => v && update({ ...s, week: v, deload: v === (state.settings.cycleWeeks || 8) })} /></label>${s.deload ? html` <span class="badge">Deload</span>` : ''} · ${fmtNiceDate(s.startedAt)} ${fmtTime(s.startedAt)} · ${loc?.name || ''} · ${fmtClock(((s.endedAt || s.startedAt) - s.startedAt) / 1000)}</p>
     <${AfterWorkout} s=${s} />
     <div class="row2">
       <button class="btn primary" onClick=${repeat}>Repeat workout</button>
@@ -147,7 +147,7 @@ export function HistoryList() {
     </div>
     ${deleting > 0 && html`<p class="muted small">${deleting} deleted workout(s) waiting to be removed from the Google Sheet.</p>`}
     ${list.length === 0 && html`<${Empty}>No finished workouts${loc ? ' here' : ''} yet.<//>`}
-    ${groups.map((g) => html`<h2>${groups.some((x) => x.cycle > 1) ? `Cycle ${g.cycle} · ` : ''}Week ${g.week}${g.deload ? ' · Deload' : ''}</h2><div class="list">
+    ${groups.map((g) => html`<h2>${groups.some((x) => x.cycle > 1) ? `Block ${g.cycle} · ` : ''}Week ${g.week}${g.deload ? ' · Deload' : ''}</h2><div class="list">
       ${g.items.map((s) => html`<a class="card hist-row" href=${'#/history/' + s.id}>
         <div><strong>${s.name}</strong>
           <small>${fmtNiceDate(s.startedAt)} · ${locName[s.locationId]?.name || ''} · ${fmtClock(((s.endedAt || s.startedAt) - s.startedAt) / 1000)}

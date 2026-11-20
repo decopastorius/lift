@@ -84,6 +84,13 @@ export function markBackupNeeded() {
   saveBackupState({ dirty: true, changedAt: Date.now() });
 }
 
+/** Read the coach's Block tabs and equipment settings through the script (for the import). */
+export async function readCoachSheet() {
+  const { sheetUrl, sheetSecret } = state.settings;
+  if (!sheetUrl) throw new Error('Connect the Google Sheet first (More → Google Sheet).');
+  return postToSheet(sheetUrl, { app: 'lift-log', action: 'readProgram', secret: sheetSecret });
+}
+
 export async function restoreFromDrive() {
   const { sheetUrl, sheetSecret } = state.settings;
   return postToSheet(sheetUrl, { app: 'lift-log', action: 'getBackup', secret: sheetSecret });

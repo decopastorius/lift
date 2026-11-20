@@ -39,7 +39,8 @@ whenever you're online, but logging never depends on the sheet.
   - it updates exercises, rep ranges and templates;
   - weeks already logged become history, so progression starts from real numbers;
   - **or paste just one week's column** (values only, with the "Week N" lines); the values are lined up with the program's rows using the h / c tags, and the preview shows exactly where each one went.
-- **Cycles and deload**: 8-week cycles (adjustable in More). Week 8 is a deload: same exercises and sets, RIR 3–4 on everything, last loads, and it doesn't count toward progression. Then week 1 of the next cycle. In the coach's sheet, cycle 2+ goes to its own tab ("Cycle 2", ...) so earlier weeks are never overwritten.
+- **Blocks and deload**: 8-week blocks (adjustable in More). Week 8 is a deload: same exercises and sets, RIR 3–4 on everything, last loads, and it doesn't count toward progression. Then week 1 of the next block. In the coach's sheet each block is its own tab ("Block 1", "Block 2", ...); a new block's tab is copied from the coach's "example new block" template.
+- **Import from Google Sheet** (More → Coach's program sheet): reads every "Block N" tab (all logged weeks, deloads included) and the equipment-settings tab through the script, and turns them into history, the program, templates and per-location exercise setups. Running it again replaces what it imported before.
 - **Weeks**: a week is one round of the program. Each workout gets the week after the last one logged with the same name (e.g. Upper 1 after week 7 → week 8). You can change it at the top of the workout or in its history page.
 - **Every finished workout is automatically**:
   - **exported to the Google Sheet**, and

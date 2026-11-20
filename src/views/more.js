@@ -2,10 +2,10 @@ import { html, useState, useEffect } from '../vendor/preact-htm.js';
 import { state, save, remove, saveSettings, importBackup, byId } from '../store.js';
 import { NumInput, Field, Toggle, Modal, confirmAction, saveBackupFile } from '../components.js';
 import { uid, fmtDate, fmtNiceDate } from '../util.js';
-import { planImport } from '../importer.js';
+import { planImport, planWorkbookImport } from '../importer.js';
 import { formatLog } from '../program.js';
 import { DEFAULT_NOTE_PRESETS } from '../pickers.js';
-import { testConnection, syncNow, pendingSessions, markBackupNeeded, restoreFromDrive } from '../sync.js';
+import { testConnection, syncNow, pendingSessions, markBackupNeeded, restoreFromDrive, readCoachSheet } from '../sync.js';
 import { persistStorage, isStandalone } from '../device.js';
 
 export function MoreView() {
@@ -163,6 +163,7 @@ function Backup() {
 
 function CoachSheet() {
   const [importing, setImporting] = useState(false);
+  const [fromSheet, setFromSheet] = useState(false);
   const layout = state.settings.program || [];
   return html`<section>
     <h2>Coach's program sheet</h2>
@@ -171,14 +172,19 @@ function CoachSheet() {
         the exercise's row and the “Week N” column, as <code>165 x 12, 12 | RIR 1, 0</code>, with the session time under the block.
         A week is one round of the program; each workout gets the week after the last one logged (you can change it on the workout).</p>
       <div class="row2">
-        <${Field} label="Weeks per cycle" hint="The last week is the deload."><${NumInput} value=${state.settings.cycleWeeks || 8} label="Weeks per cycle" onChange=${(v) => v && saveSettings({ cycleWeeks: v })} /><//>
+        <${Field} label="Weeks per block" hint="The last week is the deload."><${NumInput} value=${state.settings.cycleWeeks || 8} label="Weeks per block" onChange=${(v) => v && saveSettings({ cycleWeeks: v })} /><//>
         <${Field} label="Deload RIR"><input value=${state.settings.deloadRir || '3-4'} onInput=${(e) => saveSettings({ deloadRir: e.target.value })} /><//>
       </div>
-      <button class="btn block" onClick=${() => setImporting(true)}>Import from the coach's sheet</button>
+      <button class="btn block primary" disabled=${!state.settings.sheetUrl} onClick=${() => setFromSheet(true)}>Import from Google Sheet</button>
+      <p class="muted small">Reads the “Block N” tabs (all logged weeks, including deloads) and the equipment-settings tab
+        through the script. Updates the program, templates and setups, and replaces previously imported history.
+        ${!state.settings.sheetUrl ? ' Connect the Google Sheet above first.' : ''}</p>
+      <button class="btn block" onClick=${() => setImporting(true)}>Paste from the coach's sheet</button>
       <p class="muted small">Paste either the whole program (header rows + week columns) to update exercises, rep ranges, templates
         and history, or just one week's column (values only) to add that week as history.</p>
     </div>
     ${importing && html`<${ImportSheet} onClose=${() => setImporting(false)} />`}
+    ${fromSheet && html`<${ImportFromSheet} onClose=${() => setFromSheet(false)} />`}
   </section>`;
 }
 
@@ -239,4 +245,55 @@ function NotePresets() {
       <${Field} label="Session notes"><textarea rows="4" value=${p.session.join('\n')} onChange=${set('session')}></textarea><//>
     </div>
   </section>`;
+}
+
+function ImportFromSheet({ onClose }) {
+  const [book, setBook] = useState(null);
+  const [error, setError] = useState('');
+  const [lastDate, setLastDate] = useState(fmtDate(Date.now() - 86400000));
+  const [done, setDone] = useState('');
+  useEffect(() => {
+    readCoachSheet().then(setBook).catch((e) => setError(e.message));
+  }, []);
+  const plan = book ? planWorkbookImport(book, state, { lastDate, cycleWeeks: state.settings.cycleWeeks || 8 }) : null;
+  const locName = byId(state.locations);
+  const exName = byId(state.exercises);
+  const exOf = (id) => plan?.exercises.find((e) => e.id === id) || exName[id] || {};
+  const nameOf = (id) => exOf(id).name || '?';
+  const apply = async () => {
+    for (const id of plan.removeIds) await remove('sessions', id);
+    if (plan.layout) saveSettings({ program: plan.layout });
+    for (const e of plan.exercises) save('exercises', e);
+    for (const t of plan.templates) save('templates', t);
+    for (const s of plan.sessions) save('sessions', s);
+    markBackupNeeded();
+    setDone(`Imported ${plan.sessions.length} workouts, ${plan.templates.length} templates and ${plan.setups} equipment settings.`);
+  };
+  const recent = plan ? plan.sessions.slice(-3).reverse() : [];
+  return html`<${Modal} title="Import from Google Sheet" onClose=${onClose}>
+    ${!book && !error && html`<p class="muted">Reading ${state.settings.sheetName ? `“${state.settings.sheetName}”` : 'the sheet'}…</p>`}
+    ${error && html`<p class="error">✗ ${error}</p><p class="muted small">If the script was installed before this version, update it (paste the new script, then Deploy → Manage deployments → Edit → New version).</p>`}
+    ${plan && !done && html`<div class="import-preview">
+      <ul>
+        ${plan.blocks.map((b) => html`<li><strong>${b.name}</strong>: weeks ${b.weeks.join(', ')}</li>`)}
+        <li>${plan.sessions.length} workouts${plan.removeIds.length ? ` (replacing ${plan.removeIds.length} imported before)` : ''}</li>
+        <li>Program from ${plan.blocks.at(-1)?.name}: ${plan.layout?.map((w) => `${w.name} (${w.rows.length})`).join(', ')} → ${plan.templates.length} templates</li>
+        <li>${plan.setups} equipment settings${plan.exercises.length ? `; ${plan.exercises.length} exercises added or updated` : ''}</li>
+      </ul>
+      <${Field} label="Last workout in the sheet was on" hint="Dates of older workouts are estimated back from this one.">
+        <input type="date" value=${lastDate} onInput=${(e) => setLastDate(e.target.value)} />
+      <//>
+      <p class="small"><strong>Most recent:</strong></p>
+      ${recent.map((s) => html`<div class="preview-session">
+        <strong>${s.name}</strong> · Block ${s.cycle} · week ${s.week}${s.deload ? ' (deload)' : ''} · ${locName[s.locationId]?.name || ''} · ${fmtNiceDate(s.startedAt)}
+        <ul>${s.exercises.map((e) => html`<li>${nameOf(e.exerciseId)}: <code>${formatLog(e.sets, !!exOf(e.exerciseId).bodyweight)}</code></li>`)}</ul>
+      </div>`)}
+      ${plan.warnings.map((w) => html`<p class="error small">${w}</p>`)}
+    </div>`}
+    ${done && html`<p>✓ ${done}</p>`}
+    <div class="actions">
+      <button class="btn" onClick=${onClose}>${done ? 'Done' : 'Cancel'}</button>
+      ${!done && html`<button class="btn primary" disabled=${!plan || !plan.sessions.length} onClick=${apply}>Import</button>`}
+    </div>
+  <//>`;
 }

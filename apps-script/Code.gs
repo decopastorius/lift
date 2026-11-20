@@ -1,36 +1,42 @@
 /**
- * Lift Log → Google Sheets receiver.
+ * Lift Log → Google Sheets receiver. Install it in the coach's spreadsheet.
  *
  * Setup (once):
- *  1. Create a Google Sheet to share with your coach.
+ *  1. Open the coach's Google Sheet (you need edit access).
  *  2. Extensions → Apps Script. Replace the contents of Code.gs with this file.
+ *     (If the sheet already has another script with a doPost function, put this one in a new
+ *     Apps Script project instead: script.google.com → New project, then use SHEET_ID below.)
  *  3. Change SECRET below to any passphrase, and save.
  *  4. Deploy → New deployment → type "Web app".
  *       Execute as: Me      Who has access: Anyone
  *     Authorize when asked, then copy the Web app URL (ends in /exec).
- *  5. In Lift Log → More → Settings, paste the URL and the same passphrase, tap "Test".
+ *  5. In Lift Log → More → Google Sheet, paste the URL and the same passphrase, tap "Test".
+ *  After editing this file later: Deploy → Manage deployments → Edit → Version: New version.
  *
- * The app sends one session at a time. Re-sending a session (e.g. after you edit it)
- * replaces its rows instead of duplicating them.
+ * What it writes:
+ *  - "Summary" and "Sets" tabs: raw data, one row per exercise / per set.
+ *  - The coach's layout: a tab per block ("Block 1", "Block 2", ... = cycle 1, 2, ... in the app).
+ *    In it, each workout has a table found by its header row:
+ *        [tag] Upper 1 | Sets | Reps | Reps In Reserve | Progression | Rest Time (Min.) | Week 1 ... Week 7
+ *    and a deload table (with its own rows) whose header has "Week 8". Each workout goes in the
+ *    exercise's row, under its "Week N" column, as "165 x 12, 12 | RIR 1, 0"; the session time
+ *    goes in the row under the table. A missing block tab is copied from TEMPLATE_TAB.
+ *    Re-sending a workout replaces its cells (the cell note remembers which workout wrote it).
+ *  - A full backup of the app's data in the Drive folder below after every workout.
  *
- * Coach's layout: each workout is also written into a block like
- *     [tag] Upper 1 | Sets | Reps | Reps In Reserve | Progression | Rest Time (Min.) | Week 1 | Week 2 ...
- *     h     Seated Row (cable) | 2 | 8-10 | 0-1 | Double | 3-4 | 165 x 12, 12 | RIR 1, 0
- *           (row under the block)                               | 42'
- * The block is found by workout name in ANY tab (so your existing sheet works as long as the
- * exercise names match); if it isn't found it is created in the PROGRAM_TAB tab.
- * After a deload, a new cycle starts again at Week 1: cycle 2+ is written to its own tab,
- * "Cycle 2", "Cycle 3"... with the same layout, so earlier weeks are never overwritten.
- *
- * After each workout the app also sends a full backup, saved as a JSON file in the
- * Drive folder below (one file per day; the newest KEEP_BACKUPS are kept).
- * "Restore from Drive" in the app downloads the newest one.
+ * It also lets the app read the Block tabs and the equipment-settings tab ("Import from Google Sheet").
  */
 const SECRET = 'change-me';
+const SHEET_ID = '';                         // only for a standalone script project; leave empty otherwise
+const BLOCK_TAB = 'Block ';                  // "Block 1", "Block 2", ...
+const TEMPLATE_TAB = 'example new block';    // copied to create the next block's tab
+const SETTINGS_TAB = '_Workout_Equipment_Settings';
 const BACKUP_FOLDER = 'Lift Log backups';
 const KEEP_BACKUPS = 30;
-const PROGRAM_TAB = 'Program';
-const FIRST_WEEK_COL = 8; // column H holds "Week 1"
+
+function book() {
+  return SHEET_ID ? SpreadsheetApp.openById(SHEET_ID) : SpreadsheetApp.getActiveSpreadsheet();
+}
 
 function doPost(e) {
   let data;
@@ -40,14 +46,15 @@ function doPost(e) {
     return reply({ ok: false, error: 'Bad JSON' });
   }
   if (data.secret !== SECRET) return reply({ ok: false, error: 'Wrong passphrase' });
-  if (data.ping) return reply({ ok: true, sheet: SpreadsheetApp.getActiveSpreadsheet().getName() });
+  if (data.ping) return reply({ ok: true, sheet: book().getName() });
   if (data.action === 'getBackup') return reply(loadBackup());
+  if (data.action === 'readProgram') return reply(readProgram(book()));
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
     if (data.action === 'backup') return reply(saveBackup(data.backup));
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = book();
     if (data.action === 'delete') return reply(deleteSession(ss, data.sessionId, data.texts || []));
     upsert(ss, 'Summary', data.summaryHeaders, data.summary, data.sessionId);
     upsert(ss, 'Sets', data.setHeaders, data.sets, data.sessionId);
@@ -144,32 +151,79 @@ function deleteSession(ss, sessionId, texts) {
 // ---------- coach's layout ----------
 
 const norm = (v) => String(v == null ? '' : v).trim().toLowerCase().replace(/\s+/g, ' ');
+const isSets = (v) => norm(v) === 'sets';
 
-function findBlock(sh, workout) {
+/** Every table for this workout in a tab: header row, name column, week columns, rows by name. */
+function findTables(sh, workout) {
   const lastRow = sh.getLastRow();
-  if (!lastRow) return null;
-  const vals = sh.getRange(1, 1, lastRow, Math.max(3, sh.getLastColumn())).getDisplayValues();
+  const lastCol = sh.getLastColumn();
+  if (!lastRow || !lastCol) return [];
+  const vals = sh.getRange(1, 1, lastRow, lastCol + 1).getDisplayValues();
+  const out = [];
   for (let r = 0; r < vals.length; r++) {
-    if (norm(vals[r][1]) !== norm(workout) || norm(vals[r][2]) !== 'sets') continue;
-    const rows = {};
-    let last = r + 1;
-    for (let i = r + 1; i < vals.length; i++) {
-      if (!String(vals[i][1]).trim() || norm(vals[i][2]) === 'sets') break;
-      rows[norm(vals[i][1])] = i + 1;
-      last = i + 1;
+    for (let c = 0; c < vals[r].length - 1; c++) {
+      if (norm(vals[r][c]) !== norm(workout) || !isSets(vals[r][c + 1])) continue;
+      const weeks = {};
+      let end = c + 1;
+      for (let k = c + 2; k < vals[r].length; k++) {
+        if (k > c + 2 && isSets(vals[r][k + 1])) break; // the next table on this row
+        const m = String(vals[r][k]).match(/^\s*week\s*(\d+)\s*$/i);
+        if (m) weeks[Number(m[1])] = k + 1;
+        if (String(vals[r][k]).trim()) end = k;
+      }
+      const rows = {};
+      let last = r + 1;
+      for (let i = r + 1; i < vals.length; i++) {
+        if (isSets(vals[i][c + 1])) break;
+        const name = String(vals[i][c]).trim();
+        if (!name) continue;
+        rows[norm(name)] = i + 1;
+        last = i + 1;
+      }
+      out.push({ sh: sh, header: r + 1, nameCol: c + 1, first: Math.max(1, c), lastCol: end + 1, weeks: weeks, rows: rows, last: last });
     }
-    return { sh, header: r + 1, rows, last };
   }
-  return null;
+  return out;
 }
 
-function programTabName(p) {
-  return (p.cycle || 1) > 1 ? 'Cycle ' + p.cycle : PROGRAM_TAB;
+/** The block's tab: existing, else a copy of the template, else a new empty tab. */
+function blockSheet(ss, cycle) {
+  const name = BLOCK_TAB + (cycle || 1);
+  let sh = ss.getSheetByName(name);
+  if (sh) return sh;
+  const tpl = ss.getSheetByName(TEMPLATE_TAB);
+  if (tpl) {
+    sh = tpl.copyTo(ss);
+    sh.setName(name);
+    clearWeeks(sh);
+    return sh;
+  }
+  return ss.insertSheet(name);
 }
 
-function createBlock(ss, p) {
-  const name = programTabName(p);
-  const sh = ss.getSheetByName(name) || ss.insertSheet(name);
+/** A new block starts empty: clear the week cells of every table (example rows are kept). */
+function clearWeeks(sh) {
+  const lastRow = sh.getLastRow();
+  const lastCol = sh.getLastColumn();
+  if (!lastRow || !lastCol) return;
+  const vals = sh.getRange(1, 1, lastRow, lastCol + 1).getDisplayValues();
+  for (let r = 0; r < vals.length; r++) {
+    for (let c = 0; c < vals[r].length - 1; c++) {
+      if (!String(vals[r][c]).trim() || !isSets(vals[r][c + 1]) || isSets(vals[r][c])) continue;
+      const t = findTables(sh, vals[r][c]).filter((x) => x.header === r + 1 && x.nameCol === c + 1)[0];
+      if (!t) continue;
+      for (const w of Object.keys(t.weeks)) {
+        for (let i = t.header + 1; i <= t.last + 1; i++) {
+          if (/^example/i.test(String((vals[i - 1] || [])[c] || '').trim())) continue;
+          const cell = sh.getRange(i, t.weeks[w]);
+          if (String(cell.getDisplayValue()).trim()) { cell.clearContent(); cell.setNote(''); }
+        }
+      }
+    }
+  }
+}
+
+function createTable(sh, p) {
   const start = sh.getLastRow() ? sh.getLastRow() + 2 : 1;
   const values = [['', p.workout, 'Sets', 'Reps', 'Reps In Reserve', 'Progression', 'Rest Time (Min.)']]
     .concat(p.rows.map((r) => [r.tag, r.name, r.sets, r.reps, r.rir, r.progression, r.rest]));
@@ -177,27 +231,18 @@ function createBlock(ss, p) {
   range.setNumberFormat('@'); // keep "8-10" from turning into a date
   range.setValues(values);
   sh.getRange(start, 1, 1, 7).setFontWeight('bold');
-  return findBlock(sh, p.workout);
+  return findTables(sh, p.workout)[0];
 }
 
-function weekColumn(block, week) {
-  const sh = block.sh;
-  const width = Math.max(sh.getLastColumn(), FIRST_WEEK_COL);
-  const header = sh.getRange(block.header, 1, 1, width).getDisplayValues()[0];
-  for (let i = FIRST_WEEK_COL - 1; i < header.length; i++) {
-    const m = String(header[i]).match(/^\s*week\s*(\d+)\s*$/i);
-    if (m && Number(m[1]) === week) return i + 1;
-  }
-  let col = FIRST_WEEK_COL + week - 1; // Week N normally sits N-1 columns right of Week 1
-  if (col <= header.length && String(header[col - 1]).trim()) {
-    // taken by another header: use the first free column after the last header
-    let filled = header.length;
-    while (filled > 0 && !String(header[filled - 1]).trim()) filled--;
-    col = Math.max(filled + 1, FIRST_WEEK_COL);
-  }
-  const cell = sh.getRange(block.header, col);
-  cell.setValue('Week ' + week);
-  cell.setFontWeight('bold');
+/** Column for week N in a table: its "Week N" header, else a new header after the last one. */
+function weekColumn(t, week) {
+  if (t.weeks[week]) return t.weeks[week];
+  const cols = Object.keys(t.weeks).map((w) => t.weeks[w]);
+  let col = cols.length ? Math.max.apply(null, cols) + 1 : Math.max(t.lastCol + 1, t.nameCol + 6);
+  while (String(t.sh.getRange(t.header, col).getDisplayValue()).trim()) col++;
+  t.sh.getRange(t.header, col).setValue('Week ' + week).setFontWeight('bold');
+  t.weeks[week] = col;
+  if (col > t.lastCol) t.lastCol = col;
   return col;
 }
 
@@ -228,36 +273,56 @@ function writeCell(range, text, sessionId, comment) {
 
 function writeProgram(ss, p, sessionId) {
   if (!p || !p.workout) return;
-  let block = null;
-  if ((p.cycle || 1) > 1) {
-    const sh = ss.getSheetByName(programTabName(p));
-    if (sh) block = findBlock(sh, p.workout);
-  } else {
-    for (const sh of ss.getSheets()) {
-      if (sh.getName() === 'Summary' || sh.getName() === 'Sets' || /^Cycle \d+$/.test(sh.getName())) continue;
-      block = findBlock(sh, p.workout);
-      if (block) break;
-    }
-  }
-  if (!block) block = createBlock(ss, p);
-  // add exercises the block doesn't have yet (e.g. created mid-workout)
+  const sh = blockSheet(ss, p.cycle);
+  const tables = findTables(sh, p.workout);
+  // the table that has this week's column (week 8 lives in the deload table), else the main one
+  let t = tables.filter((x) => x.weeks[p.week])[0]
+    || tables.sort((a, b) => Object.keys(b.weeks).length - Object.keys(a.weeks).length)[0]
+    || createTable(sh, p);
+  // exercises the table doesn't list yet (e.g. created mid-workout): insert a row inside the
+  // table's own columns only, so tables beside it don't move
   for (const r of p.rows) {
-    if (block.rows[norm(r.name)] || !r.log) continue;
-    block.sh.insertRowAfter(block.last);
-    const row = block.sh.getRange(block.last + 1, 1, 1, 7);
-    row.setNumberFormat('@');
-    row.setValues([[r.tag, r.name, r.sets, r.reps, r.rir, r.progression, r.rest]]);
-    block = findBlock(block.sh, p.workout);
+    if (!r.log || t.rows[norm(r.name)]) continue;
+    const width = t.lastCol - t.first + 1;
+    sh.getRange(t.last + 1, t.first, 1, width).insertCells(SpreadsheetApp.Dimension.ROWS);
+    const cells = sh.getRange(t.last + 1, t.nameCol - 1, 1, 2);
+    cells.setNumberFormat('@');
+    cells.setValues([[r.tag || '', r.name]]);
+    const header = sh.getRange(t.header, t.nameCol, 1, width).getDisplayValues()[0].map(norm);
+    const put = (label, v) => { const k = header.indexOf(label); if (k > 0) sh.getRange(t.last + 1, t.nameCol + k).setNumberFormat('@').setValue(v); };
+    put('sets', String(r.sets || ''));
+    put('reps', r.reps || '');
+    put('reps in reserve', r.rir || '');
+    put('progression', r.progression || '');
+    put('rest time (min.)', r.rest || '');
+    t = findTables(sh, p.workout).filter((x) => x.header === t.header && x.nameCol === t.nameCol)[0];
   }
-  const col = weekColumn(block, p.week);
+  const col = weekColumn(t, p.week);
   for (const r of p.rows) {
-    if (r.log && block.rows[norm(r.name)]) writeCell(block.sh.getRange(block.rows[norm(r.name)], col), r.log, sessionId, r.note);
+    if (r.log && t.rows[norm(r.name)]) writeCell(sh.getRange(t.rows[norm(r.name)], col), r.log, sessionId, r.note);
   }
-  // session time goes in the row right under the block, if that row is free
-  const below = block.sh.getRange(block.last + 1, 2);
-  if (p.duration && !String(below.getDisplayValue()).trim()) {
-    writeCell(block.sh.getRange(block.last + 1, col), p.duration, sessionId, p.note);
+  // session time goes in the row right under the table, if that row is free
+  if (p.duration && !String(sh.getRange(t.last + 1, t.nameCol).getDisplayValue()).trim()) {
+    writeCell(sh.getRange(t.last + 1, col), p.duration, sessionId, p.note);
   }
+}
+
+/** For "Import from Google Sheet" in the app: the Block tabs and the equipment settings, as displayed. */
+function readProgram(ss) {
+  const grid = (sh) => {
+    const lastRow = sh.getLastRow();
+    const lastCol = sh.getLastColumn();
+    if (!lastRow || !lastCol) return [];
+    const vals = sh.getRange(1, 1, lastRow, lastCol).getDisplayValues();
+    while (vals.length && !vals[vals.length - 1].some((v) => String(v).trim())) vals.pop();
+    return vals;
+  };
+  const tabs = {};
+  for (const sh of ss.getSheets()) {
+    if (/^\s*block\s*\d+\s*$/i.test(sh.getName())) tabs[sh.getName()] = grid(sh);
+  }
+  const st = ss.getSheets().filter((sh) => norm(sh.getName()) === norm(SETTINGS_TAB))[0];
+  return { ok: true, sheet: ss.getName(), tabs: tabs, settings: st ? grid(st) : [] };
 }
 
 // ---------- Drive backups ----------

@@ -82,7 +82,7 @@ function SessionHeader({ s, loc, onFinish, update }) {
         <select class="sh-loc" aria-label="Location" value=${s.locationId || ''} onChange=${(e) => update({ ...s, locationId: e.target.value })}>
           ${state.locations.map((l) => html`<option value=${l.id}>${l.name}</option>`)}
         </select>
-        ${(s.cycle || 1) > 1 && html`<span>C${s.cycle}</span>`}
+        ${(s.cycle || 1) > 1 && html`<span>B${s.cycle}</span>`}
         <label class="wk">Wk <${NumInput} value=${s.week} label="Week" onChange=${(v) => v && update({ ...s, week: v, deload: v === (state.settings.cycleWeeks || 8) }, 300)} /></label>
         ${s.deload && html`<span class="badge">Deload</span>`}
         <span>· ${done} set${done === 1 ? '' : 's'}</span>

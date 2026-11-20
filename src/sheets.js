@@ -65,8 +65,9 @@ export function buildPayload(session, { exercisesById, locationsById, sessions, 
 
   // The coach's layout: a block per workout, a row per exercise, a column per week.
   const locations = Object.values(locationsById);
+  const deloadRir = session.deload ? session.exercises.find((e) => e.rir)?.rir || '3-4' : null;
   const rows = programRows({ workout: session.name, templates, locations, exercisesById, session, layout })
-    .map((r) => ({ ...r, log: logs[r.exerciseId] || '', note: notes[r.exerciseId] || '' }));
+    .map((r) => ({ ...r, rir: deloadRir || r.rir, log: logs[r.exerciseId] || '', note: notes[r.exerciseId] || '' }));
   const minutes = session.endedAt ? Math.round((session.endedAt - session.startedAt) / 60000) : 0;
   const program = {
     workout: session.name, week, cycle: session.cycle || 1, deload: !!session.deload, duration: minutes ? `${minutes}'` : '', note: session.notes || '',
