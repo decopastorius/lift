@@ -62,7 +62,7 @@ test('seeded templates follow the h / c / hc tags', () => {
     'Seated Row (cable)', 'Barbell Bench Press (horizontal)', 'Lateral (cable)', 'Cable Pressdown (rope)',
     'Standing Curl (DB / bilateral or unilateral)']);
   assert.equal(cottage('Lower 1').items.length, 3);
-  assert.equal(home('Upper 1').items[0].rest, 180);
+  assert.equal(home('Upper 1').items[0].restMin, '3-4');
   assert.equal(home('Upper 1').items[0].rir, '0-1');
 
   const rows = programRows({ workout: 'Upper 1', templates: t, locations: locs, exercisesById: Object.fromEntries(ex.map((e) => [e.id, e])) });

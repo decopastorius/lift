@@ -46,10 +46,11 @@ function doPost(e) {
   try {
     if (data.action === 'backup') return reply(saveBackup(data.backup));
     const ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (data.action === 'delete') return reply(deleteSession(ss, data.sessionId, data.texts || []));
     upsert(ss, 'Summary', data.summaryHeaders, data.summary, data.sessionId);
     upsert(ss, 'Sets', data.setHeaders, data.sets, data.sessionId);
     if (data.program) writeProgram(ss, data.program, data.sessionId);
-    return reply({ ok: true });
+    return reply({ ok: true, sheet: ss.getName() });
   } catch (err) {
     return reply({ ok: false, error: String(err) });
   } finally {
@@ -69,25 +70,73 @@ function upsert(ss, name, headers, rows, sessionId) {
     sh.setFrozenRows(1);
     sh.getRange(1, 1, 1, headers.length).setFontWeight('bold');
   }
-  // Remove existing rows for this session (column A = Session ID), bottom-up in blocks.
-  const last = sh.getLastRow();
-  if (last > 1) {
-    const ids = sh.getRange(2, 1, last - 1, 1).getValues();
-    let i = ids.length - 1;
-    while (i >= 0) {
-      if (ids[i][0] === sessionId) {
-        let j = i;
-        while (j - 1 >= 0 && ids[j - 1][0] === sessionId) j--;
-        sh.deleteRows(j + 2, i - j + 1);
-        i = j - 1;
-      } else {
-        i--;
-      }
-    }
-  }
+  removeSessionRows(sh, sessionId);
   if (rows && rows.length) {
     sh.getRange(sh.getLastRow() + 1, 1, rows.length, headers.length).setValues(rows);
   }
+}
+
+/** Remove this session's rows (column A = Session ID), bottom-up in blocks. */
+function removeSessionRows(sh, sessionId) {
+  const last = sh.getLastRow();
+  if (last <= 1) return;
+  const ids = sh.getRange(2, 1, last - 1, 1).getValues();
+  let i = ids.length - 1;
+  while (i >= 0) {
+    if (ids[i][0] === sessionId) {
+      let j = i;
+      while (j - 1 >= 0 && ids[j - 1][0] === sessionId) j--;
+      sh.deleteRows(j + 2, i - j + 1);
+      i = j - 1;
+    } else {
+      i--;
+    }
+  }
+}
+
+/** A workout deleted in the app: remove its Summary/Sets rows and its cells in the coach's layout. */
+function deleteSession(ss, sessionId, texts) {
+  for (const name of ['Summary', 'Sets']) {
+    const sh = ss.getSheetByName(name);
+    if (sh) removeSessionRows(sh, sessionId);
+  }
+  const tag = 'lift-log:' + sessionId;
+  let cleared = 0;
+  for (const sh of ss.getSheets()) {
+    if (sh.getName() === 'Summary' || sh.getName() === 'Sets') continue;
+    const lastRow = sh.getLastRow();
+    const lastCol = sh.getLastColumn();
+    if (!lastRow || !lastCol) continue;
+    const notes = sh.getRange(1, 1, lastRow, lastCol).getNotes();
+    for (let r = 0; r < notes.length; r++) {
+      for (let c = 0; c < notes[r].length; c++) {
+        const note = String(notes[r][c] || '');
+        if (note.indexOf(tag) === -1) continue;
+        const cell = sh.getRange(r + 1, c + 1);
+        // the note is a list of entries "comment lines... + lift-log:<id>"; drop ours
+        const entries = [];
+        let cur = [];
+        for (const line of note.split('\n')) {
+          cur.push(line);
+          if (line.indexOf('lift-log:') === 0) { entries.push(cur); cur = []; }
+        }
+        const others = entries.filter((e) => e[e.length - 1] !== tag);
+        if (!others.length) {
+          cell.clearContent();
+          cell.setNote('');
+        } else {
+          // another workout shares this cell (same week): remove just our line
+          const lines = String(cell.getDisplayValue()).split('\n');
+          const k = lines.findIndex((l) => texts.indexOf(l) !== -1);
+          if (k !== -1 && lines.length > others.length) lines.splice(k, 1);
+          cell.setValue(lines.join('\n'));
+          cell.setNote(others.map((e) => e.join('\n')).join('\n'));
+        }
+        cleared++;
+      }
+    }
+  }
+  return { ok: true, cleared: cleared };
 }
 
 // ---------- coach's layout ----------
@@ -157,9 +206,12 @@ function writeCell(range, text, sessionId, comment) {
   const owners = (note.match(/lift-log:/g) || []).length;
   const newNote = (comment ? comment + '\n' : '') + tag;
   range.setNumberFormat('@');
-  if (!current || current === text || (mine && owners === 1)) {
+  if (!current || (mine && owners === 1) || (current === text && owners === 0)) {
     range.setValue(text);
     range.setNote(newNote);
+  } else if (current === text && !mine) {
+    // same value from another workout (e.g. the same session time): share the cell
+    range.setNote(note + '\n' + newNote);
   } else if (!mine) {
     // a second workout in the same week: keep both
     range.setValue(current + '\n' + text);

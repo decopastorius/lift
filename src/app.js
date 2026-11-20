@@ -3,7 +3,7 @@ import { state, subscribe, load, activeSession } from './store.js';
 import { syncNow } from './sync.js';
 import { TrainView } from './views/train.js';
 import { SessionView } from './views/session.js';
-import { HistoryView } from './views/history.js';
+import { HistoryView, HistoryList } from './views/history.js';
 import { TemplatesView, TemplateEditor } from './views/templates.js';
 import { ExercisesView, ExerciseDetail } from './views/exercises.js';
 import { MoreView } from './views/more.js';
@@ -24,7 +24,7 @@ function route(path) {
   const [, a, b] = path.split('/');
   switch (a) {
     case 'session': return ['train', html`<${SessionView} />`];
-    case 'history': return ['train', html`<${HistoryView} key=${b} id=${b} />`];
+    case 'history': return ['history', b ? html`<${HistoryView} key=${b} id=${b} />` : html`<${HistoryList} />`];
     case 'templates': return ['templates', b ? html`<${TemplateEditor} key=${b} id=${b} />` : html`<${TemplatesView} />`];
     case 'exercises': return ['exercises', b ? html`<${ExerciseDetail} key=${b} id=${b} />` : html`<${ExercisesView} />`];
     case 'more': return ['more', html`<${MoreView} />`];
@@ -36,6 +36,7 @@ function Nav({ tab }) {
   const act = activeSession();
   const items = [
     ['train', act ? '#/session' : '#/', act ? 'Workout' : 'Train', '🏋'],
+    ['history', '#/history', 'History', '🗓'],
     ['templates', '#/templates', 'Templates', '☰'],
     ['exercises', '#/exercises', 'Exercises', '◎'],
     ['more', '#/more', 'More', '⚙'],

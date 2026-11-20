@@ -53,7 +53,7 @@ export function planImport(text, { locations, exercises, templates, sessions }, 
         if (!loc) { warnings.push(`${w.name}: no location starting with “${letter.toUpperCase()}”, those rows were skipped.`); continue; }
         const items = rows.filter((r) => r.tag.includes(letter)).map((r) => ({
           id: uid(), exerciseId: r.ex.id, warmups: 0, sets: r.sets, myo: 0, partials: 0,
-          rest: restSeconds(r.restMin), restMin: r.restMin, rir: r.rir, group: '',
+          restMin: r.restMin, rir: r.rir, group: '',
         }));
         const existing = templates.find((t) => norm(t.name) === norm(w.name) && t.locationId === loc.id);
         outTemplates.push(existing ? { ...existing, items } : { id: uid(), name: w.name, locationId: loc.id, items, createdAt: Date.now() });

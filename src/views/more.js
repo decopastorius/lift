@@ -60,7 +60,8 @@ function Timers() {
     <h2>Rest timer</h2>
     <div class="card form">
       <div class="row2">
-        <${Field} label="Default rest (s)"><${NumInput} value=${st.defaultRest} onChange=${set('defaultRest')} label="Default rest" /><//>
+        <${Field} label="Compound (s)"><${NumInput} value=${st.compoundRest} onChange=${set('compoundRest')} label="Compound rest" /><//>
+        <${Field} label="Isolation (s)"><${NumInput} value=${st.isolationRest} onChange=${set('isolationRest')} label="Isolation rest" /><//>
         <${Field} label="After warm-up (s)"><${NumInput} value=${st.warmupRest} onChange=${set('warmupRest')} label="Warm-up rest" /><//>
         <${Field} label="Myo mini-set (s)"><${NumInput} value=${st.myoRest} onChange=${set('myoRest')} label="Myo rest" /><//>
         <${Field} label="Superset switch (s)"><${NumInput} value=${st.supersetRest} onChange=${set('supersetRest')} label="Superset transition" /><//>
@@ -80,15 +81,17 @@ function SheetSettings() {
     <div class="card form">
       <p class="muted small">Optional. Logging works without it. Finished workouts queue up and sync when you’re online.
         Setup steps are in the README (Apps Script → Deploy as web app).</p>
-      <${Field} label="Web app URL"><input type="url" value=${st.sheetUrl} placeholder="https://script.google.com/macros/s/…/exec"
-        onInput=${(e) => saveSettings({ sheetUrl: e.target.value.trim() })} /><//>
+      ${st.sheetUrl && st.sheetName && html`<p class="connected">Logging to Google Sheet <strong>“${st.sheetName}”</strong></p>`}
+      <${Field} label="Web app URL" hint="The URL belongs to the sheet you installed the script in (Extensions → Apps Script in that sheet). To log to another sheet, install the script there and paste its URL.">
+        <input type="url" value=${st.sheetUrl} placeholder="https://script.google.com/macros/s/…/exec"
+          onInput=${(e) => saveSettings({ sheetUrl: e.target.value.trim(), sheetName: '' })} /><//>
       <${Field} label="Passphrase"><input value=${st.sheetSecret} placeholder="Same as SECRET in the script"
         onInput=${(e) => saveSettings({ sheetSecret: e.target.value })} /><//>
       <div class="actions">
         <span class="muted small">${msg || (pending ? `${pending} workout(s) waiting` : 'All synced')}</span>
         <button class="btn small" disabled=${!st.sheetUrl} onClick=${async () => {
           setMsg('Testing…');
-          try { const r = await testConnection(st.sheetUrl, st.sheetSecret); setMsg(`Connected to “${r.sheet}”`); } catch (e) { setMsg('✗ ' + e.message); }
+          try { const r = await testConnection(st.sheetUrl, st.sheetSecret); saveSettings({ sheetName: r.sheet }); setMsg(`Connected to “${r.sheet}”`); } catch (e) { setMsg('✗ ' + e.message); }
         }}>Test</button>
         <button class="btn small primary" disabled=${!st.sheetUrl || !pending || state.sync.busy} onClick=${syncNow}>Sync now</button>
       </div>

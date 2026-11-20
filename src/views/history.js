@@ -1,4 +1,4 @@
-import { html } from '../vendor/preact-htm.js';
+import { html, useState } from '../vendor/preact-htm.js';
 import { state, save, remove, byId } from '../store.js';
 import { labelSets, SET_NAME } from '../progression.js';
 import { itemsFromSession } from '../session-logic.js';
@@ -6,7 +6,7 @@ import { formatLog, weekOf } from '../program.js';
 import { NumInput, Field, NoteField, go, Empty, confirmAction, saveBackupFile } from '../components.js';
 import { DEFAULT_NOTE_PRESETS } from '../pickers.js';
 import { fmtClock, fmtNiceDate, fmtTime, uid } from '../util.js';
-import { syncNow, markBackupNeeded } from '../sync.js';
+import { syncNow, markBackupNeeded, deleteWorkout } from '../sync.js';
 import { begin } from './train.js';
 
 export function HistoryView({ id }) {
@@ -38,7 +38,7 @@ export function HistoryView({ id }) {
 
 
   return html`<div class="page">
-    <a class="back" href="#/">‹ Train</a>
+    <a class="back" href="#/history">‹ History</a>
     <h1>${s.name}</h1>
     <p class="muted"><label class="wk">Week <${NumInput} value=${weekOf(s, state.sessions)} label="Week" onChange=${(v) => v && update({ ...s, week: v })} /></label> · ${fmtNiceDate(s.startedAt)} ${fmtTime(s.startedAt)} · ${loc?.name || ''} · ${fmtClock(((s.endedAt || s.startedAt) - s.startedAt) / 1000)}</p>
     <${AfterWorkout} s=${s} />
@@ -79,11 +79,11 @@ export function HistoryView({ id }) {
       <${NoteField} value=${s.notes} presets=${(state.settings.notePresets || DEFAULT_NOTE_PRESETS).session} onChange=${(v) => update({ ...s, notes: v })} />
     <//>
     <p class="muted small">Set legend: W = warm-up, numbers = working sets, MA/M = myo activation/mini-sets, P = lengthened partials.</p>
-    <button class="btn block danger ghost" onClick=${async () => {
-      if (!confirmAction('Delete this workout from the app? (Rows already in Google Sheet stay there.)')) return;
-      await remove('sessions', s.id);
-      markBackupNeeded();
-      go('#/');
+    <button class="btn block danger" onClick=${async () => {
+      const inSheet = s.syncedAt && state.settings.sheetUrl;
+      if (!confirmAction(`Delete “${s.name}” (week ${weekOf(s, state.sessions)}, ${fmtNiceDate(s.startedAt)})?${inSheet ? ' It will also be removed from the Google Sheet.' : ''} This can’t be undone.`)) return;
+      await deleteWorkout(s);
+      go('#/history');
     }}>Delete workout</button>
   </div>`;
 }
@@ -118,5 +118,42 @@ function AfterWorkout({ s }) {
     <div>${sheet}</div>
     <div>${backup}</div>
     ${!allDone && !state.sync.busy && html`<button class="btn small" onClick=${syncNow}>Retry now</button>`}
+  </div>`;
+}
+
+const LOC_KEY = 'liftlog.historyLocation';
+const readLoc = () => { try { return localStorage.getItem(LOC_KEY) || ''; } catch { return ''; } };
+
+/** Every finished workout, newest first, grouped by program week. */
+export function HistoryList() {
+  const [loc, setLoc] = useState(readLoc());
+  const pick = (id) => { setLoc(id); try { localStorage.setItem(LOC_KEY, id); } catch { /* ignore */ } };
+  const locName = byId(state.locations);
+  const all = state.sessions.filter((s) => s.status === 'done');
+  const list = all.filter((s) => !loc || s.locationId === loc).sort((a, b) => b.startedAt - a.startedAt);
+  const groups = [];
+  for (const s of list) {
+    const w = weekOf(s, all);
+    const g = groups.at(-1);
+    if (g && g.week === w) g.items.push(s); else groups.push({ week: w, items: [s] });
+  }
+  const deleting = state.sessions.filter((s) => s.status === 'deleted').length;
+  return html`<div class="page">
+    <h1>History</h1>
+    <div class="chips">
+      <button class=${'chip' + (!loc ? ' on' : '')} onClick=${() => pick('')}>All</button>
+      ${state.locations.map((l) => html`<button class=${'chip' + (loc === l.id ? ' on' : '')} onClick=${() => pick(l.id)}>${l.name}</button>`)}
+    </div>
+    ${deleting > 0 && html`<p class="muted small">${deleting} deleted workout(s) waiting to be removed from the Google Sheet.</p>`}
+    ${list.length === 0 && html`<${Empty}>No finished workouts${loc ? ' here' : ''} yet.<//>`}
+    ${groups.map((g) => html`<h2>Week ${g.week}</h2><div class="list">
+      ${g.items.map((s) => html`<a class="card hist-row" href=${'#/history/' + s.id}>
+        <div><strong>${s.name}</strong>
+          <small>${fmtNiceDate(s.startedAt)} · ${locName[s.locationId]?.name || ''} · ${fmtClock(((s.endedAt || s.startedAt) - s.startedAt) / 1000)}
+            · ${s.exercises.reduce((a, e) => a + e.sets.length, 0)} sets${s.importKey ? ' · imported' : ''}</small></div>
+        <span class=${'sync-dot ' + (s.syncState || 'none')} title=${s.syncState === 'synced' ? 'In Google Sheet' : 'Not synced yet'}>
+          ${s.syncState === 'synced' ? '✓' : s.syncState === 'error' ? '!' : '•'}</span>
+      </a>`)}
+    </div>`)}
   </div>`;
 }

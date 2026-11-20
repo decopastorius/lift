@@ -2,13 +2,15 @@
 import { SET, isLogged, suggest } from './progression.js';
 import { myoNext, blockSets } from './myo.js';
 import { uid } from './util.js';
-import { restSeconds, defaultLayout, nextWeek } from './program.js';
+import { defaultLayout, nextWeek } from './program.js';
 import { DEFAULT_NOTE_PRESETS } from './pickers.js';
 
 export const DEFAULT_SETTINGS = {
   id: 'settings',
   unit: 'lb',
-  defaultRest: 120,      // seconds between working sets
+  defaultRest: 120,      // fallback only
+  compoundRest: 180,     // timer between sets of compound movements
+  isolationRest: 90,     // timer between sets of isolation movements
   warmupRest: 60,
   myoRest: 15,           // between myo mini-sets (3–5 deep breaths)
   supersetRest: 15,      // transition between exercises inside a superset
@@ -25,7 +27,7 @@ export function newSet(type, extra = {}) {
 }
 
 export function newPlanItem(exerciseId, settings = DEFAULT_SETTINGS) {
-  return { id: uid(), exerciseId, warmups: 0, sets: 2, myo: 0, partials: 0, rest: settings.defaultRest, restMin: '', rir: '', group: '' };
+  return { id: uid(), exerciseId, warmups: 0, sets: 2, myo: 0, partials: 0, restMin: '', rir: '', group: '' };
 }
 
 /** History of one exercise across all finished sessions, oldest -> newest. */
@@ -45,7 +47,19 @@ export function suggestionFor(exercise, sessions, opts) {
 }
 
 /** Build the in-session record for one exercise from a template item. */
-export function buildSessionExercise(item, exercise, suggestion) {
+/** Compound movements get the longer timer. Older exercises without the flag: 8–10 or lower ranges count as compound. */
+export function isCompound(exercise) {
+  if (typeof exercise?.compound === 'boolean') return exercise.compound;
+  return (Number(exercise?.repMax) || 12) <= 10;
+}
+
+/** Rest timer for an exercise: a template's custom timer if set, else the compound / isolation default. */
+export function restFor(exercise, settings = DEFAULT_SETTINGS, item = {}) {
+  if (item.restCustom && item.rest) return item.rest;
+  return isCompound(exercise) ? settings.compoundRest || 180 : settings.isolationRest || 90;
+}
+
+export function buildSessionExercise(item, exercise, suggestion, settings = DEFAULT_SETTINGS) {
   const w = suggestion?.weight ?? (exercise.bodyweight ? 0 : null);
   const tgt = (i) => {
     const t = suggestion?.targets || [];
@@ -60,7 +74,7 @@ export function buildSessionExercise(item, exercise, suggestion) {
     id: uid(),
     exerciseId: exercise.id,
     group: item.group || '',
-    rest: restSeconds(item.restMin) || item.rest || null,
+    rest: restFor(exercise, settings, item),
     rir: item.rir || '',
     restMin: item.restMin || '',
     plan: { warmups: item.warmups || 0, sets: item.sets || 0, myo: item.myo || 0, partials: item.partials || 0 },
@@ -90,11 +104,7 @@ export function startSession({ template, locationId, exercisesById, sessions, se
       .filter((it) => exercisesById[it.exerciseId])
       .map((it) => {
         const ex = exercisesById[it.exerciseId];
-        return buildSessionExercise(
-          { ...it, rest: restSeconds(it.restMin) || it.rest || settings.defaultRest },
-          ex,
-          suggestionFor(ex, sessions),
-        );
+        return buildSessionExercise(it, ex, suggestionFor(ex, sessions), settings);
       }),
   };
 }
@@ -254,7 +264,6 @@ export function itemsFromSession(session, settings = DEFAULT_SETTINGS) {
       sets: done ? count(SET.WORKING) : e.plan?.sets || 0,
       myo: done ? count(SET.MYO_ACT) : e.plan?.myo || 0,
       partials: done ? count(SET.PARTIAL) : e.plan?.partials || 0,
-      rest: e.rest || settings.defaultRest,
       restMin: e.restMin || '',
       rir: e.rir || '',
       group: e.group || '',

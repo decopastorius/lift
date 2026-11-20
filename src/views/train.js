@@ -37,7 +37,7 @@ export function TrainView() {
     .reduce((m, s) => Math.max(m, s.startedAt), 0);
   const history = state.sessions.filter((s) => s.status === 'done')
     .filter((s) => !loc || s.locationId === loc)
-    .sort((a, b) => b.startedAt - a.startedAt).slice(0, 30);
+    .sort((a, b) => b.startedAt - a.startedAt).slice(0, 3);
   const pending = pendingSessions();
   const pick = (id) => { setLoc(id); setLocStore(id); };
 
@@ -77,7 +77,7 @@ export function TrainView() {
         </div>`
       : history.length > 0 && html`<div class="banner"><span>Google Sheet sync isn’t set up.</span><a class="btn small" href="#/more">Set up</a></div>`}
 
-    <h2>History</h2>
+    <div class="title-row"><h2>Recent</h2><a class="small" href="#/history">All history ›</a></div>
     ${history.length === 0 && html`<${Empty}>Finished workouts show up here.<//>`}
     <div class="list">
       ${history.map((s) => html`<a class="card hist-row" href=${'#/history/' + s.id}>

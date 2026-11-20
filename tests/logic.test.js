@@ -97,8 +97,8 @@ test('full session flow: plan, log, myo, superset rest, finish, sheet rows', () 
   const template = {
     id: 't1', name: 'Upper A', locationId: 'home',
     items: [
-      { id: 'i1', exerciseId: 'bench', warmups: 1, sets: 2, myo: 0, partials: 1, rest: 150, group: 'A' },
-      { id: 'i2', exerciseId: 'pull', warmups: 0, sets: 2, myo: 0, partials: 0, rest: 150, group: 'A' },
+      { id: 'i1', exerciseId: 'bench', warmups: 1, sets: 2, myo: 0, partials: 1, rest: 150, restCustom: true, group: 'A' },
+      { id: 'i2', exerciseId: 'pull', warmups: 0, sets: 2, myo: 0, partials: 0, rest: 150, restCustom: true, group: 'A' },
       { id: 'i3', exerciseId: 'curl', warmups: 0, sets: 0, myo: 1, partials: 0, rest: 90, group: '' },
     ],
   };
@@ -205,4 +205,23 @@ test('starter library is valid', async () => {
   assert.equal(new Set(list.map((e) => e.name)).size, list.length);
   for (const e of list) assert.ok(e.repMin < e.repMax && e.increment > 0, e.name);
   assert.ok(list.find((e) => e.name === 'Pull-Ups/Chin-Ups').bodyweight);
+});
+
+test('rest timer defaults: 3:00 compound, 1:30 isolation', async () => {
+  const { seedLocations, seedExercises, seedTemplates } = await import('../src/seed.js');
+  const { restFor, isCompound } = await import('../src/session-logic.js');
+  const locs = seedLocations();
+  const exs = seedExercises();
+  const byName = (n) => exs.find((e) => e.name === n);
+  assert.equal(restFor(byName('Deadlift (conventional)')), 180);
+  assert.equal(restFor(byName('Seated Row (cable)')), 180);
+  assert.equal(restFor(byName('Lateral (cable)')), 90);
+  assert.equal(restFor(byName('Ab Exercise of Choice')), 90);
+  assert.equal(isCompound({ repMin: 8, repMax: 10 }), true, 'older exercises without the flag');
+  assert.equal(isCompound({ repMin: 10, repMax: 15 }), false);
+  const s = startSession({
+    template: seedTemplates(locs, exs)[0], exercisesById: Object.fromEntries(exs.map((e) => [e.id, e])),
+    sessions: [], settings: DEFAULT_SETTINGS,
+  });
+  assert.deepEqual(s.exercises.map((e) => e.rest), [180, 180, 90, 90, 90]);
 });

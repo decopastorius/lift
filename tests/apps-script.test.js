@@ -20,6 +20,8 @@ class Sheet {
       setValues(vals) { all((rr, cc, i, j) => { sh.cell(rr, cc)[cc - 1] = vals[i][j]; }); return this; },
       setValue(v) { sh.cell(r, c)[c - 1] = v; return this; },
       getNote() { return sh.notes[`${r},${c}`] || ''; },
+      getNotes() { const out = []; for (let i = 0; i < nr; i++) { out.push([]); for (let j = 0; j < nc; j++) out[i].push(sh.notes[`${r + i},${c + j}`] || ''); } return out; },
+      clearContent() { all((rr, cc) => { if (sh.v[rr - 1]) sh.v[rr - 1][cc - 1] = ''; }); return this; },
       setNote(n) { sh.notes[`${r},${c}`] = n; return this; },
       setNumberFormat() { return this; },
       setFontWeight() { return this; },
@@ -73,7 +75,7 @@ test('writes into the existing coach sheet, next to Week 1', () => {
     ['h', 'Leg Extension', 2, '10-15', '1-2', 'Double', '1-3', '130 x 14, 14 | RIR 2, 2'],
   ]);
   const { ss, post } = load([coach]);
-  assert.deepEqual(post(payload('s2', program(2, '170 x 9, 8 | RIR 1, 0'))), { ok: true });
+  assert.deepEqual(post(payload('s2', program(2, '170 x 9, 8 | RIR 1, 0'))), { ok: true, sheet: 'Coach Log' });
   assert.equal(coach.v[0][8], 'Week 2');
   assert.equal(coach.v[3][8], '170 x 9, 8 | RIR 1, 0');
   assert.equal(coach.v[3][7], '165 x 12, 12 | RIR 1, 0', 'week 1 untouched');
@@ -107,4 +109,28 @@ test('creates the block in a new Program tab when there is none', () => {
   assert.deepEqual(sh.v[2].slice(0, 8), ['h', 'Seated Row (cable)', 2, '8-10', '0-1', 'Double', '3-4', '165 x 12, 12 | RIR 1, 0']);
   assert.equal(sh.v[3][7], "45'");
   assert.ok(ss.getSheetByName('Summary') && ss.getSheetByName('Sets'));
+});
+
+test('deleting a workout removes its rows and its cells', () => {
+  const coach = new Sheet('Sheet1', [
+    H,
+    ['h', 'Seated Row (cable)', 2, '8-10', '0-1', 'Double', '3-4', ''],
+    ['', '', '', '', '', '', '', ''],
+  ]);
+  const { ss, post } = load([coach]);
+  post(payload('a', program(1, '165 x 12, 12')));
+  post(payload('b', program(1, '170 x 9, 9'))); // same week: shares the cell
+  assert.equal(coach.v[1][7], '165 x 12, 12\n170 x 9, 9');
+  assert.equal(ss.getSheetByName('Summary').getLastRow(), 3);
+
+  assert.deepEqual(post({ action: 'delete', sessionId: 'a', texts: ['165 x 12, 12', "45'"] }), { ok: true, cleared: 2 });
+  assert.equal(coach.v[1][7], '170 x 9, 9');
+  assert.equal(coach.notes['2,8'], 'lift-log:b');
+  assert.equal(coach.v[2][7], "45'", 'session time still belongs to b');
+  assert.equal(ss.getSheetByName('Summary').getLastRow(), 2);
+
+  post({ action: 'delete', sessionId: 'b', texts: ['170 x 9, 9', "45'"] });
+  assert.equal(coach.v[1][7], '');
+  assert.equal(coach.v[2][7], '', 'session time cleared too');
+  assert.equal(ss.getSheetByName('Sets').getLastRow(), 1);
 });

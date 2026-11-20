@@ -1,6 +1,6 @@
 // First-run data. Everything here is editable in the app.
 import { uid } from './util.js';
-import { PROGRAM, norm, locLetter, restSeconds } from './program.js';
+import { PROGRAM, norm, locLetter } from './program.js';
 
 export function seedLocations() {
   return ['Home', 'Cottage', 'Travel'].map((name, i) => ({ id: uid(), name, order: i, equipment: '' }));
@@ -36,6 +36,7 @@ const LIST = [
 export function seedExercises() {
   return LIST.map(([name, category, repMin, repMax, increment, bodyweight, notes]) => newExercise({
     name, category, repMin, repMax, increment, bodyweight: !!bodyweight, notes: notes || '',
+    compound: repMax <= 10, // compounds are 8–10 / 6–8 in this program; isolation 10–15
   }));
 }
 
@@ -50,7 +51,7 @@ export function seedTemplates(locations, exercises) {
         .filter(([tag, name]) => tag.includes(letter) && exByName[norm(name)])
         .map(([, name, sets, rir, restMin]) => ({
           id: uid(), exerciseId: exByName[norm(name)].id, warmups: 0, sets, myo: 0, partials: 0,
-          rest: restSeconds(restMin), restMin, rir, group: '',
+          restMin, rir, group: '',
         }));
       if (items.length) out.push({ id: uid(), name: w.name, locationId: loc.id, items, createdAt: Date.now() });
     }

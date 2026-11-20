@@ -18,6 +18,9 @@ whenever you're online, but logging never depends on the sheet.
 - **Exercise library**: comes with a starter list, you can bulk-import your own (`Name, Category, 8-12, 5, bw`), and you can create exercises in the middle of a workout.
 - **Tap to log**: tapping a set's weight, reps or RIR opens a panel of options to tap (loads in steps around the suggestion, with ◀ ▶ to shift; reps around the range with the target highlighted; RIR 0–5), each with a box to type in, and a **Log set** button.
 - **Quick notes**: preset notes for exercises and the session (editable in More), plus free text. In the coach's sheet they appear as a cell note on that week's entry.
+- **Rest timer defaults**: 3:00 for compound movements and 1:30 for isolation (each exercise has a "Compound movement" switch; both times are adjustable in More → Rest timer). The coach's rest range (e.g. "3-4 min") is shown on the card as the prescription.
+- **History tab**: every finished workout, grouped by program week and filterable by location. Open one to review or correct it (changes re-sync), repeat it, save it as a template, or **delete** it. A deleted workout is also removed from the Google Sheet (Summary/Sets rows and its cell in the coach's grid), including when you're offline, on the next sync.
+- **Templates**: Templates tab → tap one to edit, duplicate or delete it (past workouts are kept).
 - **Set types**: warm-up, working, **myo-reps** (guided), and **lengthened partials** (as separate sets). Each set records weight, reps and RIR.
 - **Myo-rep guidance**: after the activation set the app sets a mini-set target of about ⅓ of the activation reps (3–5), starts a 15 s breathing timer, and ends the myo-rep set when a mini-set misses the target (or after 5 mini-sets).
 - **Supersets**: give consecutive exercises the same letter. You get a short transition timer between them and the full rest after the round.
@@ -58,6 +61,8 @@ can't alert you while the phone is locked. Keep the app open during a workout. T
 by default (More → Rest timer).
 
 ## Google Sheet + Drive backup setup (once, about 5 minutes)
+
+The app never signs in to Google. The script below is installed *inside* one spreadsheet, and its web-app URL writes to that spreadsheet, running as you. Install it in the coach's sheet, which you need edit access to. More → Google Sheet then shows which sheet you're logging to.
 
 1. Create a Google Sheet and share it with your coach.
 2. In the sheet: **Extensions → Apps Script**. Replace `Code.gs` with [`apps-script/Code.gs`](apps-script/Code.gs).

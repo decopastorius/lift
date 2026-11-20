@@ -270,3 +270,6 @@ textarea { resize: vertical; }
 .note-chips .chip { font-size: .82rem; padding: 4px 10px; min-height: 32px; }
 .pick.shift { color: var(--accent); background: var(--input); border-color: transparent; }
 .log-bar { position: sticky; bottom: -16px; background: var(--card); padding: 4px 0 12px; margin-bottom: -16px; }
+.connected { background: var(--good-bg); color: var(--good); padding: 8px 10px; border-radius: 8px; font-size: .9rem; margin: 0 0 6px; }
+.title-row h2 { margin-bottom: .5rem; }
+.title-row a.small { font-size: .9rem; }

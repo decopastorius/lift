@@ -36,7 +36,7 @@ export function SessionView() {
 
   const addExercise = (exercise) => {
     const item = newPlanItem(exercise.id, state.settings);
-    const se = buildSessionExercise(item, exercise, suggestionFor(exercise, state.sessions));
+    const se = buildSessionExercise(item, exercise, suggestionFor(exercise, state.sessions), state.settings);
     update({ ...s, exercises: [...s.exercises, se] });
     setPicker(false);
     setTimeout(() => document.getElementById('ex-' + se.id)?.scrollIntoView({ behavior: 'smooth' }), 50);
@@ -170,7 +170,8 @@ function ExerciseCard({ s, se, idx, exercise, locationId, update }) {
     <div class="rx">${[
       `${se.plan?.sets || se.sets.filter((x) => x.type === SET.WORKING).length} × ${exercise.repMin}–${exercise.repMax}`,
       se.rir && `RIR ${se.rir}`,
-      se.restMin ? `rest ${se.restMin} min` : se.rest && `rest ${fmtClock(se.rest)}`,
+      se.restMin && `rest ${se.restMin} min`,
+      se.rest && `timer ${fmtClock(se.rest)}`,
     ].filter(Boolean).join(' · ')}</div>
     <${Target} sug=${se.suggestion} exercise=${exercise} />
     <button class="setup-line" onClick=${() => setSetupOpen(true)}>

@@ -70,7 +70,7 @@ export function ExerciseDetail({ id }) {
   const [draft, setDraft] = useState(() => (existing ? { ...existing } : newExercise()));
   const [setupFor, setSetupFor] = useState(null);
   if (id !== 'new' && !existing) return html`<${Empty}>Exercise not found.<//>`;
-  const FIELDS = ['name', 'category', 'repMin', 'repMax', 'increment', 'bodyweight', 'notes'];
+  const FIELDS = ['name', 'category', 'repMin', 'repMax', 'increment', 'bodyweight', 'compound', 'notes'];
   const dirty = !existing || FIELDS.some((k) => draft[k] !== existing[k]);
   const locName = byId(state.locations);
   const history = existing ? historyFor(existing.id, state.sessions).reverse() : [];

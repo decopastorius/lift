@@ -1,7 +1,7 @@
 // Push finished sessions to Google Sheets via an Apps Script web app.
 // Tracking never depends on this: sessions stay local with syncState 'pending'
 // until a push succeeds, and we retry whenever the app is opened or comes online.
-import { state, save, emit, byId, exportBackup, saveBackupState } from './store.js';
+import { state, save, remove, emit, byId, exportBackup, saveBackupState, saveSettings } from './store.js';
 import { buildPayload } from './sheets.js';
 
 export function pendingSessions() {
@@ -28,7 +28,8 @@ export async function syncNow() {
   if (!sheetUrl || state.sync.busy) return;
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
   const todo = pendingSessions();
-  if (!todo.length && !state.backup.dirty) return;
+  const deletions = state.sessions.filter((x) => x.status === 'deleted');
+  if (!todo.length && !deletions.length && !state.backup.dirty) return;
   state.sync = { ...state.sync, busy: true, lastError: '' };
   emit();
   let ok = true;
@@ -38,10 +39,23 @@ export async function syncNow() {
   };
   for (const s of todo) {
     try {
-      await postToSheet(sheetUrl, { ...buildPayload(s, ctx), secret: sheetSecret });
+      const r = await postToSheet(sheetUrl, { ...buildPayload(s, ctx), secret: sheetSecret });
+      if (r.sheet && r.sheet !== state.settings.sheetName) saveSettings({ sheetName: r.sheet });
       save('sessions', { ...s, syncState: 'synced', syncedAt: Date.now(), syncError: '' });
     } catch (e) {
       save('sessions', { ...s, syncState: 'error', syncError: String(e.message || e) });
+      state.sync.lastError = String(e.message || e);
+      ok = false;
+      break;
+    }
+  }
+  for (const s of ok ? deletions : []) {
+    try {
+      const p = buildPayload(s, ctx);
+      const texts = [...p.program.rows.map((r) => r.log).filter(Boolean), p.program.duration].filter(Boolean);
+      await postToSheet(sheetUrl, { app: 'lift-log', action: 'delete', sessionId: s.id, texts, secret: sheetSecret });
+      await remove('sessions', s.id);
+    } catch (e) {
       state.sync.lastError = String(e.message || e);
       ok = false;
       break;
@@ -77,6 +91,20 @@ export async function restoreFromDrive() {
 
 export async function testConnection(url, secret) {
   return postToSheet(url, { app: 'lift-log', ping: true, secret });
+}
+
+/**
+ * Delete a finished workout. If it was ever sent to the sheet, it's kept as 'deleted' until the
+ * sheet has removed it too (works offline: it goes out with the next sync).
+ */
+export async function deleteWorkout(session) {
+  markBackupNeeded();
+  if (session.syncedAt && state.settings.sheetUrl) {
+    save('sessions', { ...session, status: 'deleted', syncState: 'pending' });
+    syncNow();
+  } else {
+    await remove('sessions', session.id);
+  }
 }
 
 export function markForResync(session) {

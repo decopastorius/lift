@@ -3,6 +3,8 @@ import { state, save, exportBackup } from './store.js';
 import { newExercise } from './seed.js';
 import { num, byName, fmtDate } from './util.js';
 import { hasNote, toggleNote } from './pickers.js';
+import { isCompound } from './session-logic.js';
+const fmtRest = (s) => `${Math.floor((s || 0) / 60)}:${String((s || 0) % 60).padStart(2, '0')}`;
 
 export const go = (path) => { location.hash = path; };
 
@@ -63,6 +65,7 @@ export function ExerciseForm({ value, onChange }) {
       <${Field} label="+ lb"><${NumInput} decimal value=${value.increment} onChange=${set('increment')} label="Weight increment" /><//>
     </div>
     <${Toggle} checked=${value.bodyweight} onChange=${set('bodyweight')} label="Bodyweight exercise (weight = added load)" />
+    <${Toggle} checked=${isCompound(value)} onChange=${set('compound')} label=${`Compound movement (rest timer ${fmtRest(state.settings.compoundRest)}; otherwise ${fmtRest(state.settings.isolationRest)})`} />
   </div>`;
 }
 
