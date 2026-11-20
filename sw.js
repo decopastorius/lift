@@ -1,6 +1,6 @@
 // Offline support: cache the whole app shell, serve it cache-first.
 // Bump VERSION on every release so phones pick up the new files.
-const VERSION = 'v1.9.0';
+const VERSION = 'v1.10.0';
 const CACHE = 'lift-log-' + VERSION;
 const FILES = [
   './',
@@ -36,7 +36,8 @@ const FILES = [
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));
+  // cache: 'reload' skips the browser's HTTP cache, so a new version never stores old files
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES.map((f) => new Request(f, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (e) => {
@@ -45,6 +46,10 @@ self.addEventListener('activate', (e) => {
       .then((keys) => Promise.all(keys.filter((k) => k.startsWith('lift-log-') && k !== CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
   );
+});
+
+self.addEventListener('message', (e) => {
+  if (e.data === 'version') e.source?.postMessage({ version: VERSION });
 });
 
 self.addEventListener('fetch', (e) => {

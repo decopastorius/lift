@@ -5,7 +5,7 @@ import { uid, fmtDate, fmtNiceDate } from '../util.js';
 import { planImport, planWorkbookImport } from '../importer.js';
 import { formatLog } from '../program.js';
 import { DEFAULT_NOTE_PRESETS } from '../pickers.js';
-import { testConnection, syncNow, pendingSessions, markBackupNeeded, restoreFromDrive, readCoachSheet } from '../sync.js';
+import { testConnection, syncNow, pendingSessions, markBackupNeeded, restoreFromDrive, readCoachSheet, SCRIPT_VERSION, UPDATE_SCRIPT_HELP } from '../sync.js';
 import { persistStorage, isStandalone } from '../device.js';
 
 export function MoreView() {
@@ -18,6 +18,7 @@ export function MoreView() {
     <${SheetSettings} />
     <${CoachSheet} />
     <${Backup} />
+    <${AppVersion} />
     <p class="muted small center">Lift Log · data is stored on this device only, plus your Google Sheet.</p>
   </div>`;
 }
@@ -101,7 +102,11 @@ function SheetSettings() {
         <span class="muted small">${msg || (pending ? `${pending} workout(s) waiting` : 'All synced')}</span>
         <button class="btn small" disabled=${!st.sheetUrl} onClick=${async () => {
           setMsg('Testing…');
-          try { const r = await testConnection(st.sheetUrl, st.sheetSecret); saveSettings({ sheetName: r.sheet }); setMsg(`Connected to “${r.sheet}”`); } catch (e) { setMsg('✗ ' + e.message); }
+          try {
+            const r = await testConnection(st.sheetUrl, st.sheetSecret);
+            saveSettings({ sheetName: r.sheet, scriptVersion: r.version || 0 });
+            setMsg((r.version || 0) < SCRIPT_VERSION ? `Connected to “${r.sheet}”, but ✗ ${UPDATE_SCRIPT_HELP}` : `Connected to “${r.sheet}” (script v${r.version}, up to date)`);
+          } catch (e) { setMsg('✗ ' + e.message); }
         }}>Test</button>
         <button class="btn small primary" disabled=${!st.sheetUrl || !pending || state.sync.busy} onClick=${syncNow}>Sync now</button>
       </div>
@@ -272,7 +277,7 @@ function ImportFromSheet({ onClose }) {
   const recent = plan ? plan.sessions.slice(-3).reverse() : [];
   return html`<${Modal} title="Import from Google Sheet" onClose=${onClose}>
     ${!book && !error && html`<p class="muted">Reading ${state.settings.sheetName ? `“${state.settings.sheetName}”` : 'the sheet'}…</p>`}
-    ${error && html`<p class="error">✗ ${error}</p><p class="muted small">If the script was installed before this version, update it (paste the new script, then Deploy → Manage deployments → Edit → New version).</p>`}
+    ${error && html`<p class="error">✗ ${error}</p>`}
     ${plan && !done && html`<div class="import-preview">
       <ul>
         ${plan.blocks.map((b) => html`<li><strong>${b.name}</strong>: weeks ${b.weeks.join(', ')}</li>`)}
@@ -296,4 +301,39 @@ function ImportFromSheet({ onClose }) {
       ${!done && html`<button class="btn primary" disabled=${!plan || !plan.sessions.length} onClick=${apply}>Import</button>`}
     </div>
   <//>`;
+}
+
+function AppVersion() {
+  const [version, setVersion] = useState('');
+  const [msg, setMsg] = useState('');
+  useEffect(() => {
+    const sw = navigator.serviceWorker;
+    if (!sw?.controller) return undefined;
+    const on = (e) => e.data?.version && setVersion(e.data.version);
+    sw.addEventListener('message', on);
+    sw.controller.postMessage('version');
+    return () => sw.removeEventListener('message', on);
+  }, []);
+  return html`<section>
+    <h2>App</h2>
+    <div class="card form">
+      <p class="small">Version <strong>${version || '…'}</strong>${state.settings.scriptVersion ? html` · Google script v${state.settings.scriptVersion}${state.settings.scriptVersion < SCRIPT_VERSION ? ' (needs updating)' : ''}` : ''}</p>
+      <button class="btn small" onClick=${async () => {
+        setMsg('Checking…');
+        try {
+          const reg = window.__swReg || await navigator.serviceWorker?.getRegistration();
+          await reg?.update();
+          const waiting = reg?.installing || reg?.waiting;
+          if (waiting) {
+            setMsg('Downloading the new version…');
+            navigator.serviceWorker.addEventListener('controllerchange', () => location.reload(), { once: true });
+            setTimeout(() => location.reload(), 4000);
+          } else {
+            setMsg('You have the latest version.');
+          }
+        } catch (e) { setMsg('Couldn’t check (offline?).'); }
+      }}>Check for updates</button>
+      ${msg && html`<p class="small">${msg}</p>`}
+    </div>
+  </section>`;
 }

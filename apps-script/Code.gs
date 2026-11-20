@@ -27,6 +27,7 @@
  * It also lets the app read the Block tabs and the equipment-settings tab ("Import from Google Sheet").
  */
 const SECRET = 'change-me';
+const SCRIPT_VERSION = 4;                   // the app checks this to tell you when the script needs updating
 const SHEET_ID = '';                         // only for a standalone script project; leave empty otherwise
 const BLOCK_TAB = 'Block ';                  // "Block 1", "Block 2", ...
 const TEMPLATE_TAB = 'example new block';    // copied to create the next block's tab
@@ -46,7 +47,7 @@ function doPost(e) {
     return reply({ ok: false, error: 'Bad JSON' });
   }
   if (data.secret !== SECRET) return reply({ ok: false, error: 'Wrong passphrase' });
-  if (data.ping) return reply({ ok: true, sheet: book().getName() });
+  if (data.ping) return reply({ ok: true, sheet: book().getName(), version: SCRIPT_VERSION });
   if (data.action === 'getBackup') return reply(loadBackup());
   if (data.action === 'readProgram') return reply(readProgram(book()));
 
@@ -322,7 +323,7 @@ function readProgram(ss) {
     if (/^\s*block\s*\d+\s*$/i.test(sh.getName())) tabs[sh.getName()] = grid(sh);
   }
   const st = ss.getSheets().filter((sh) => norm(sh.getName()) === norm(SETTINGS_TAB))[0];
-  return { ok: true, sheet: ss.getName(), tabs: tabs, settings: st ? grid(st) : [] };
+  return { ok: true, sheet: ss.getName(), version: SCRIPT_VERSION, tabs: tabs, settings: st ? grid(st) : [] };
 }
 
 // ---------- Drive backups ----------

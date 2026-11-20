@@ -85,10 +85,21 @@ export function markBackupNeeded() {
 }
 
 /** Read the coach's Block tabs and equipment settings through the script (for the import). */
+export const SCRIPT_VERSION = 4;
+export const UPDATE_SCRIPT_HELP = 'The Google script this URL runs is an older version. In Apps Script: paste the new script, Save, then Deploy → Manage deployments → ✏️ Edit → Version: “New version” → Deploy. (A “New deployment” makes a new URL; if you did that, paste the new URL here.)';
+
 export async function readCoachSheet() {
   const { sheetUrl, sheetSecret } = state.settings;
   if (!sheetUrl) throw new Error('Connect the Google Sheet first (More → Google Sheet).');
-  return postToSheet(sheetUrl, { app: 'lift-log', action: 'readProgram', secret: sheetSecret });
+  let r;
+  try {
+    r = await postToSheet(sheetUrl, { app: 'lift-log', action: 'readProgram', secret: sheetSecret });
+  } catch (e) {
+    if (/wrong passphrase|unexpected reply/i.test(e.message)) throw e;
+    throw new Error(UPDATE_SCRIPT_HELP);
+  }
+  if (!r.tabs || (r.version || 0) < SCRIPT_VERSION) throw new Error(UPDATE_SCRIPT_HELP);
+  return r;
 }
 
 export async function restoreFromDrive() {
