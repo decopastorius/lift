@@ -2,9 +2,9 @@ import { html } from '../vendor/preact-htm.js';
 import { state, save, remove, byId } from '../store.js';
 import { labelSets, SET_NAME } from '../progression.js';
 import { itemsFromSession } from '../session-logic.js';
-import { NumInput, Field, go, Empty, confirmAction } from '../components.js';
+import { NumInput, Field, go, Empty, confirmAction, saveBackupFile } from '../components.js';
 import { fmtClock, fmtNiceDate, fmtTime, uid } from '../util.js';
-import { syncNow } from '../sync.js';
+import { syncNow, markBackupNeeded } from '../sync.js';
 import { begin } from './train.js';
 
 export function HistoryView({ id }) {
@@ -17,6 +17,7 @@ export function HistoryView({ id }) {
   // Editing a finished workout marks it for re-sync; the sheet replaces its rows.
   const update = (next) => {
     save('sessions', { ...next, syncState: 'pending' }, 400);
+    if (!state.backup.dirty) markBackupNeeded();
     clearTimeout(update.t);
     update.t = setTimeout(syncNow, 3000);
   };
@@ -33,19 +34,12 @@ export function HistoryView({ id }) {
     begin({ id: null, name: s.name, locationId: s.locationId, items: itemsFromSession(s, state.settings) });
   };
 
-  const syncLabel = {
-    synced: `✓ In Google Sheet${s.syncedAt ? ' (' + fmtNiceDate(s.syncedAt) + ' ' + fmtTime(s.syncedAt) + ')' : ''}`,
-    pending: 'Waiting to sync to Google Sheet',
-    error: `Sync failed: ${s.syncError || ''}`,
-  }[s.syncState] || 'Not synced';
 
   return html`<div class="page">
     <a class="back" href="#/">‹ Train</a>
     <h1>${s.name}</h1>
     <p class="muted">${fmtNiceDate(s.startedAt)} ${fmtTime(s.startedAt)} · ${loc?.name || ''} · ${fmtClock(((s.endedAt || s.startedAt) - s.startedAt) / 1000)}</p>
-    <div class="banner ${s.syncState}"><span>${syncLabel}</span>
-      ${s.syncState !== 'synced' && state.settings.sheetUrl && html`<button class="btn small" onClick=${syncNow} disabled=${state.sync.busy}>Sync</button>`}
-    </div>
+    <${AfterWorkout} s=${s} />
     <div class="row2">
       <button class="btn primary" onClick=${repeat}>Repeat workout</button>
       ${!template && html`<button class="btn" onClick=${() => {
@@ -85,7 +79,41 @@ export function HistoryView({ id }) {
     <button class="btn block danger ghost" onClick=${async () => {
       if (!confirmAction('Delete this workout from the app? (Rows already in Google Sheet stay there.)')) return;
       await remove('sessions', s.id);
+      markBackupNeeded();
       go('#/');
     }}>Delete workout</button>
+  </div>`;
+}
+
+/** Where this workout has been sent: Google Sheet export + Google Drive backup. */
+function AfterWorkout({ s }) {
+  const b = state.backup;
+  const offline = navigator.onLine === false;
+  const when = (t) => (t ? ` · ${fmtNiceDate(t)} ${fmtTime(t)}` : '');
+  if (!state.settings.sheetUrl) {
+    return html`<div class="status-card warn">
+      <div>⚠ Google Sheet and Drive backup aren’t set up, so this workout is on this phone only.</div>
+      <div class="row2">
+        <button class="btn small" onClick=${saveBackupFile}>Save backup file</button>
+        <a class="btn small" href="#/more">Set up Google Sheet</a>
+      </div>
+    </div>`;
+  }
+  const waiting = offline ? 'offline, will send automatically' : state.sync.busy ? 'sending…' : 'waiting';
+  const sheet = s.syncState === 'synced'
+    ? html`<span class="ok">✓ Google Sheet${when(s.syncedAt)}</span>`
+    : s.syncState === 'error'
+      ? html`<span class="bad">✗ Google Sheet: ${s.syncError}</span>`
+      : html`<span>⏳ Google Sheet: ${waiting}</span>`;
+  const backup = !b.dirty && b.lastAt
+    ? html`<span class="ok">✓ Backed up to Google Drive${when(b.lastAt)}</span>`
+    : b.error
+      ? html`<span class="bad">✗ Drive backup: ${b.error}</span>`
+      : html`<span>⏳ Drive backup: ${waiting}</span>`;
+  const allDone = s.syncState === 'synced' && !b.dirty;
+  return html`<div class=${'status-card' + (allDone ? ' good' : '')}>
+    <div>${sheet}</div>
+    <div>${backup}</div>
+    ${!allDone && !state.sync.busy && html`<button class="btn small" onClick=${syncNow}>Retry now</button>`}
   </div>`;
 }

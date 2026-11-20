@@ -1,8 +1,8 @@
 import { html, useState, useEffect } from '../vendor/preact-htm.js';
-import { state, save, remove, saveSettings, exportBackup, importBackup } from '../store.js';
-import { NumInput, Field, Toggle, confirmAction } from '../components.js';
-import { uid, fmtDate } from '../util.js';
-import { testConnection, syncNow, pendingSessions } from '../sync.js';
+import { state, save, remove, saveSettings, importBackup } from '../store.js';
+import { NumInput, Field, Toggle, confirmAction, saveBackupFile } from '../components.js';
+import { uid } from '../util.js';
+import { testConnection, syncNow, pendingSessions, markBackupNeeded, restoreFromDrive } from '../sync.js';
 import { persistStorage, isStandalone } from '../device.js';
 
 export function MoreView() {
@@ -71,7 +71,7 @@ function SheetSettings() {
   const [msg, setMsg] = useState('');
   const pending = pendingSessions().length;
   return html`<section>
-    <h2>Google Sheet (for your coach)</h2>
+    <h2>Google Sheet & Drive backup</h2>
     <div class="card form">
       <p class="muted small">Optional. Logging works without it. Finished workouts queue up and sync when you’re online.
         Setup steps are in the README (Apps Script → Deploy as web app).</p>
@@ -101,30 +101,39 @@ function Backup() {
   const [persisted, setPersisted] = useState(null);
   const [msg, setMsg] = useState('');
   useEffect(() => { persistStorage().then(setPersisted); }, []);
+  const b = state.backup;
+  const connected = !!state.settings.sheetUrl;
   return html`<section>
     <h2>Backup</h2>
     <div class="card form">
-      <p class="muted small">Your data lives on this phone. Export a backup now and then (e.g. to iCloud Drive).
-        ${persisted === true ? ' Storage is marked persistent ✓' : persisted === false ? ' Storage not yet persistent; install to Home Screen for best safety.' : ''}</p>
+      <p class="small"><strong>Automatic:</strong> after every workout, a full backup is saved to the
+        “Lift Log backups” folder in your Google Drive (one per day, last 30 days kept).</p>
+      <p class="small ${b.error ? 'error' : 'muted'}">${!connected ? 'Needs the Google Sheet connection above.'
+        : b.error ? 'Last attempt failed: ' + b.error
+        : b.lastAt ? `Last backup: ${new Date(b.lastAt).toLocaleString()}${b.file ? ' (' + b.file + ')' : ''}${b.dirty ? '. New changes waiting' : ''}`
+        : 'No backup yet.'}</p>
       <div class="row2">
-        <button class="btn" onClick=${async () => {
-          const data = await exportBackup();
-          const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
-          const file = new File([blob], `lift-log-backup-${fmtDate(Date.now())}.json`, { type: 'application/json' });
-          if (navigator.canShare?.({ files: [file] })) {
-            try { await navigator.share({ files: [file], title: 'Lift Log backup' }); return; } catch { /* fall through */ }
-          }
-          const a = document.createElement('a');
-          a.href = URL.createObjectURL(blob);
-          a.download = file.name;
-          a.click();
-          setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-        }}>Export backup</button>
-        <label class="btn file-btn">Restore backup
+        <button class="btn" disabled=${!connected || state.sync.busy} onClick=${() => { markBackupNeeded(); syncNow(); }}>Back up now</button>
+        <button class="btn" disabled=${!connected} onClick=${async () => {
+          if (!confirmAction('Replace ALL data on this phone with the latest Google Drive backup?')) return;
+          setMsg('Downloading…');
+          try {
+            const r = await restoreFromDrive();
+            if (!r.backup) throw new Error('No backup found in Google Drive yet');
+            await importBackup(r.backup);
+            setMsg(`Restored ${r.file} ✓`);
+          } catch (err) { setMsg('✗ ' + err.message); }
+        }}>Restore from Drive</button>
+      </div>
+      <p class="muted small">Backup file on this phone (e.g. to Files / iCloud Drive):
+        ${persisted === true ? ' storage is marked persistent ✓' : persisted === false ? ' install to Home Screen for safest storage.' : ''}</p>
+      <div class="row2">
+        <button class="btn" onClick=${saveBackupFile}>Save backup file</button>
+        <label class="btn file-btn">Restore from file
           <input type="file" accept="application/json,.json" onChange=${async (e) => {
             const f = e.target.files[0];
             if (!f) return;
-            if (!confirmAction('Replace ALL data on this device with this backup?')) return;
+            if (!confirmAction('Replace ALL data on this phone with this backup?')) return;
             try { await importBackup(JSON.parse(await f.text())); setMsg('Backup restored ✓'); } catch (err) { setMsg('✗ ' + err.message); }
           }} />
         </label>

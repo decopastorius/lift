@@ -234,3 +234,9 @@ textarea { resize: vertical; }
 .tabbar .ti { font-size: 1.25rem; position: relative; line-height: 1; }
 .tabbar .live { position: absolute; top: -2px; right: -8px; width: 8px; height: 8px; border-radius: 50%; background: var(--good); }
 .update-toast { position: fixed; top: calc(env(safe-area-inset-top) + 8px); left: 50%; transform: translateX(-50%); z-index: 60; background: var(--accent); color: #fff; border: 0; border-radius: 999px; padding: 10px 16px; font: inherit; font-weight: 600; }
+
+.status-card { display: flex; flex-direction: column; gap: 6px; background: var(--warn-bg); border-radius: 12px; padding: 10px 14px; margin: 12px 0; font-size: .9rem; }
+.status-card.good { background: var(--good-bg); }
+.status-card .ok { color: var(--good); font-weight: 600; }
+.status-card .bad { color: var(--danger); }
+.status-card .btn { align-self: flex-start; }

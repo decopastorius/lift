@@ -9,7 +9,7 @@ import {
 import { NumInput, Modal, ExercisePicker, Field, go, Empty, confirmAction } from '../components.js';
 import { fmtClock, fmtNiceDate, fmtLoad, uid } from '../util.js';
 import { beep, unlockAudio, keepAwake } from '../device.js';
-import { syncNow } from '../sync.js';
+import { syncNow, markBackupNeeded } from '../sync.js';
 
 export function useTick(ms = 500) {
   const [, set] = useState(0);
@@ -289,11 +289,15 @@ function FinishModal({ s, onClose }) {
       save('templates', t);
       save('sessions', { ...done, templateId: t.id, name: t.name });
     }
+    markBackupNeeded();
     go('#/history/' + s.id);
-    syncNow();
+    syncNow(); // sheet export, then Drive backup (queued if offline)
   };
 
   return html`<${Modal} title="Finish workout" onClose=${onClose}>
+    <p class="muted small">${state.settings.sheetUrl
+      ? 'On finish, the workout is sent to your Google Sheet and a full backup is saved to Google Drive (queued if offline).'
+      : 'Google Sheet isn’t set up yet, so this workout stays on this phone only. You can save a backup file on the next screen.'}</p>
     <p><strong>${fmtClock((Date.now() - s.startedAt) / 1000)}</strong> · ${sets} sets logged
       ${pendingSets > 0 && html`<br /><small class="muted">${pendingSets} unlogged set(s) will be dropped.</small>`}</p>
     ${changed && html`<label class="toggle"><input type="checkbox" checked=${updateTpl} onChange=${(e) => setUpdateTpl(e.target.checked)} />

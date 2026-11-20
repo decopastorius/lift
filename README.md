@@ -27,7 +27,12 @@ whenever you're online, but logging never depends on the sheet.
   - A `Summary` tab with one row per exercise per workout, plus the suggested target for next time.
   - A `Sets` tab with one row per set.
   - Editing a past workout re-sends it, replacing its rows instead of duplicating them.
-- **Backup / restore** to a JSON file (e.g. saved to iCloud Drive).
+- **Every finished workout is automatically**:
+  - **exported to the Google Sheet**, and
+  - **backed up to Google Drive**: a full JSON backup in a `Lift Log backups` folder, one file per day, last 30 days kept.
+
+  Both are queued if you're offline and sent as soon as you're back online. The screen after a workout shows ✓ for each.
+- **Restore** from the latest Drive backup (e.g. on a new phone) or from a backup file saved on the phone.
 
 ## Install on iPhone
 
@@ -36,13 +41,13 @@ whenever you're online, but logging never depends on the sheet.
 3. Open it from the Home Screen icon. From then on it works offline.
 
 > iOS keeps data for Home Screen apps; plain Safari tabs can be cleared after weeks of non-use.
-> Use the installed app, and export a backup now and then (More → Backup).
+> Use the installed app. With the Google Sheet connected, every workout is also backed up to Google Drive.
 
 **Rest-timer sound:** iPhones mute web audio when the ring/silent switch is on silent, and web apps
 can't alert you while the phone is locked. Keep the app open during a workout. The screen stays awake
 by default (More → Rest timer).
 
-## Google Sheet setup (once, about 5 minutes)
+## Google Sheet + Drive backup setup (once, about 5 minutes)
 
 1. Create a Google Sheet and share it with your coach.
 2. In the sheet: **Extensions → Apps Script**. Replace `Code.gs` with [`apps-script/Code.gs`](apps-script/Code.gs).
@@ -51,7 +56,8 @@ by default (More → Rest timer).
    - Execute as: **Me**
    - Who has access: **Anyone**
 
-   Authorize it when asked (you may need "Advanced → Go to project").
+   Authorize it when asked (you may need "Advanced → Go to project"). It asks for access to
+   Sheets (to write the workout rows) and Drive (to save the backups).
 5. Copy the **Web app URL** (it ends in `/exec`).
 6. In Lift Log, go to **More → Google Sheet**, paste the URL and the passphrase, and tap **Test**.
 

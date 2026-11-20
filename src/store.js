@@ -11,6 +11,8 @@ export const state = {
   templates: [],
   sessions: [],
   sync: { busy: false, lastError: '', lastAt: null },
+  // Drive backup status: dirty = data changed since the last successful backup
+  backup: { id: 'backup', dirty: false, lastAt: null, file: '', error: '' },
 };
 
 const listeners = new Set();
@@ -27,6 +29,7 @@ export async function load() {
     ['kv', 'locations', 'exercises', 'templates', 'sessions'].map(db.getAll),
   );
   const settings = kv.find((r) => r.id === 'settings');
+  state.backup = { id: 'backup', dirty: false, lastAt: null, file: '', error: '', ...(kv.find((r) => r.id === 'backup') || {}) };
   state.settings = { ...DEFAULT_SETTINGS, ...(settings || {}) };
   state.locations = locations;
   state.exercises = exercises;
@@ -82,6 +85,12 @@ export async function remove(store, id) {
   emit();
   pending.delete(store + ':' + id);
   await db.del(store, id);
+}
+
+export function saveBackupState(patch) {
+  state.backup = { ...state.backup, ...patch, id: 'backup' };
+  emit();
+  db.put('kv', state.backup).catch((e) => console.error('save failed', e));
 }
 
 export function saveSettings(patch) {

@@ -1,7 +1,7 @@
 import { html, useState, useEffect, useRef } from './vendor/preact-htm.js';
-import { state, save } from './store.js';
+import { state, save, exportBackup } from './store.js';
 import { newExercise } from './seed.js';
-import { num, byName } from './util.js';
+import { num, byName, fmtDate } from './util.js';
 
 export const go = (path) => { location.hash = path; };
 
@@ -109,4 +109,19 @@ export function Empty({ children }) {
 
 export function confirmAction(msg) {
   return window.confirm(msg);
+}
+
+/** Save the full backup as a JSON file (iPhone: opens the Share sheet → Save to Files). */
+export async function saveBackupFile() {
+  const data = await exportBackup();
+  const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+  const file = new File([blob], `lift-log-backup-${fmtDate(Date.now())}.json`, { type: 'application/json' });
+  if (navigator.canShare?.({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: 'Lift Log backup' }); return; } catch { /* fall back to download */ }
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = file.name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
