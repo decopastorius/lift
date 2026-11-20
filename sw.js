@@ -1,6 +1,6 @@
 // Offline support: cache the whole app shell, serve it cache-first.
 // Bump VERSION on every release so phones pick up the new files.
-const VERSION = 'v1.11.0';
+const VERSION = 'v1.12.0';
 const CACHE = 'lift-log-' + VERSION;
 const FILES = [
   './',
@@ -17,6 +17,9 @@ const FILES = [
   './src/myo.js',
   './src/progression.js',
   './src/program.js',
+  './src/muscles.js',
+  './src/fatigue.js',
+  './src/views/progress.js',
   './src/coachsheet.js',
   './src/pickers.js',
   './src/importer.js',

@@ -6,6 +6,7 @@ import { ExerciseForm, Modal, Field, go, Empty, confirmAction } from '../compone
 import { newExercise, parseExerciseList } from '../seed.js';
 import { fmtNiceDate, fmtLoad, byName } from '../util.js';
 import { SetupModal } from './session.js';
+import { MUSCLES, musclesFor, DEFAULT_VOLUME } from '../muscles.js';
 
 export function ExercisesView() {
   const [q, setQ] = useState('');
@@ -103,6 +104,8 @@ export function ExerciseDetail({ id }) {
     </div>
 
     ${existing && html`
+      <h2>Muscles worked</h2>
+      <${MusclePicker} exercise=${existing} />
       <h2>Equipment setup</h2>
       <div class="list compact">
         ${[...state.locations, { id: 'any', name: 'Any location' }].map((l) => {
@@ -132,5 +135,28 @@ export function ExerciseDetail({ id }) {
       </div>
     `}
     ${setupFor && html`<${SetupModal} exercise=${existing} locationId=${setupFor === 'any' ? null : setupFor} onClose=${() => setSetupFor(null)} />`}
+  </div>`;
+}
+
+/** Tap a muscle to cycle: not worked → primary (1 set) → secondary (½ set). Saved on the exercise. */
+function MusclePicker({ exercise }) {
+  const m = musclesFor(exercise);
+  const own = !!(exercise.muscles?.primary?.length || exercise.muscles?.secondary?.length);
+  const half = (state.settings.volume || DEFAULT_VOLUME).secondary ?? 0.5;
+  const cycle = (name) => {
+    const primary = m.primary.filter((x) => x !== name);
+    const secondary = m.secondary.filter((x) => x !== name);
+    if (m.primary.includes(name)) secondary.push(name);
+    else if (!m.secondary.includes(name)) primary.push(name);
+    save('exercises', { ...exercise, muscles: { primary, secondary } });
+  };
+  return html`<div class="muscle-picker">
+    <div class="note-chips">${MUSCLES.map((name) => {
+      const kind = m.primary.includes(name) ? 'primary' : m.secondary.includes(name) ? 'secondary' : '';
+      return html`<button class=${'chip ' + (kind === 'primary' ? 'on' : kind === 'secondary' ? 'half' : '')} onClick=${() => cycle(name)}>
+        ${name}${kind === 'primary' ? ' · 1' : kind === 'secondary' ? ` · ${half === 0.5 ? '½' : half}` : ''}</button>`;
+    })}</div>
+    <p class="muted small">Tap to cycle: primary (counts 1 set) → secondary (${half === 0.5 ? '½' : half} set) → off.
+      ${own ? html`<button class="linklike" onClick=${() => save('exercises', { ...exercise, muscles: null })}>Reset to automatic</button>` : 'Currently guessed from the name.'}</p>
   </div>`;
 }

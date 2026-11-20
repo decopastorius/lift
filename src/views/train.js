@@ -57,7 +57,7 @@ export function TrainView() {
       ${locations.map((l) => html`<button class=${'chip' + (loc === l.id ? ' on' : '')} onClick=${() => pick(l.id)}>${l.name}</button>`)}
     </div>
 
-    <h2>Templates</h2>
+    <div class="title-row"><h2>Templates</h2><a class="small" href="#/templates">Manage ›</a></div>
     ${templates.length === 0 && html`<${Empty}>No templates${loc ? ' for ' + locName[loc]?.name : ''} yet.
       <a href="#/templates/new">Create one</a> or start an empty workout and save it at the end.<//>`}
     <div class="list">

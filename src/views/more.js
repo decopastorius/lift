@@ -5,6 +5,7 @@ import { uid, fmtDate, fmtNiceDate } from '../util.js';
 import { planImport, planWorkbookImport } from '../importer.js';
 import { formatLog } from '../program.js';
 import { DEFAULT_NOTE_PRESETS } from '../pickers.js';
+import { DEFAULT_VOLUME } from '../muscles.js';
 import { testConnection, syncNow, pendingSessions, markBackupNeeded, restoreFromDrive, readCoachSheet, SCRIPT_VERSION, UPDATE_SCRIPT_HELP } from '../sync.js';
 import { persistStorage, isStandalone } from '../device.js';
 
@@ -15,6 +16,7 @@ export function MoreView() {
     <${Locations} />
     <${Timers} />
     <${NotePresets} />
+    <${VolumeRules} />
     <${SheetSettings} />
     <${CoachSheet} />
     <${Backup} />
@@ -335,6 +337,26 @@ function AppVersion() {
         } catch (e) { setMsg('Couldn’t check (offline?).'); }
       }}>Check for updates</button>
       ${msg && html`<p class="small">${msg}</p>`}
+    </div>
+  </section>`;
+}
+
+function VolumeRules() {
+  const v = { ...DEFAULT_VOLUME, ...(state.settings.volume || {}) };
+  const set = (k) => (x) => x != null && saveSettings({ volume: { ...v, [k]: x } });
+  return html`<section>
+    <h2>Volume counting</h2>
+    <div class="card form">
+      <p class="muted small">How sets count toward weekly sets per muscle (Progress tab).</p>
+      <div class="row2">
+        <${Field} label="Secondary muscle (× set)"><${NumInput} decimal value=${v.secondary} onChange=${set('secondary')} label="Secondary muscle factor" /><//>
+        <${Field} label="Myo mini-set (× set)"><${NumInput} decimal value=${Math.round(v.myoMini * 100) / 100} onChange=${set('myoMini')} label="Myo mini-set credit" /><//>
+        <${Field} label="Lengthened partial (× set)"><${NumInput} decimal value=${v.partial} onChange=${set('partial')} label="Partial set credit" /><//>
+        <${Field} label="Hard set up to RIR"><${NumInput} value=${v.maxRir} onChange=${set('maxRir')} label="Highest RIR that counts" /><//>
+        <${Field} label="Typical range from"><${NumInput} value=${v.low} onChange=${set('low')} label="Range low" /><//>
+        <${Field} label="to (sets / week)"><${NumInput} value=${v.high} onChange=${set('high')} label="Range high" /><//>
+      </div>
+      <button class="btn small ghost" onClick=${() => saveSettings({ volume: { ...DEFAULT_VOLUME } })}>Reset to defaults</button>
     </div>
   </section>`;
 }

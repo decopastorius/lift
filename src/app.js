@@ -7,6 +7,7 @@ import { HistoryView, HistoryList } from './views/history.js';
 import { TemplatesView, TemplateEditor } from './views/templates.js';
 import { ExercisesView, ExerciseDetail } from './views/exercises.js';
 import { MoreView } from './views/more.js';
+import { ProgressView } from './views/progress.js';
 
 function useHash() {
   const [hash, setHash] = useState(location.hash || '#/');
@@ -25,7 +26,8 @@ function route(path) {
   switch (a) {
     case 'session': return ['train', html`<${SessionView} />`];
     case 'history': return ['history', b ? html`<${HistoryView} key=${b} id=${b} />` : html`<${HistoryList} />`];
-    case 'templates': return ['templates', b ? html`<${TemplateEditor} key=${b} id=${b} />` : html`<${TemplatesView} />`];
+    case 'templates': return ['train', b ? html`<${TemplateEditor} key=${b} id=${b} />` : html`<${TemplatesView} />`];
+    case 'progress': return ['progress', html`<${ProgressView} />`];
     case 'exercises': return ['exercises', b ? html`<${ExerciseDetail} key=${b} id=${b} />` : html`<${ExercisesView} />`];
     case 'more': return ['more', html`<${MoreView} />`];
     default: return ['train', html`<${TrainView} />`];
@@ -37,7 +39,7 @@ function Nav({ tab }) {
   const items = [
     ['train', act ? '#/session' : '#/', act ? 'Workout' : 'Train', '🏋'],
     ['history', '#/history', 'History', '🗓'],
-    ['templates', '#/templates', 'Templates', '☰'],
+    ['progress', '#/progress', 'Progress', '📈'],
     ['exercises', '#/exercises', 'Exercises', '◎'],
     ['more', '#/more', 'More', '⚙'],
   ];
