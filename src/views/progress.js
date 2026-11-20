@@ -6,6 +6,7 @@ import { Empty, go } from '../components.js';
 
 const MAX_WEEKS = 12;
 const fmt = (x) => (Number.isInteger(x) ? String(x) : x.toFixed(1));
+const clock = (sec) => `${Math.floor(sec / 60)}:${String(Math.round(sec % 60)).padStart(2, '0')}`;
 
 export function ProgressView() {
   const rules = { ...DEFAULT_VOLUME, ...(state.settings.volume || {}) };
@@ -167,6 +168,7 @@ function ExerciseList({ items }) {
           </span>
           <small>${last.load || 'BW'} × ${last.reps.join(', ')}${x.status.since ? ` · ${x.status.since} without progress` : ''}</small>
         </div>
+        ${x.status.shortRest && html`<div class="es-note">⏱ Rest was short last time: ${clock(x.status.shortRest.taken)} vs ${clock(x.status.shortRest.planned)} planned${x.status.shortRest.measured ? '' : ' (estimated)'} — may explain it, not fatigue.</div>`}
       </button>`;
     })}
     <p class="muted small legend">▲ progress · ● flat · ◆ grind (same output, harder) · ▼ regress — oldest to newest, deloads skipped.

@@ -24,6 +24,10 @@ whenever you're online, but logging never depends on the sheet.
 - **Set types**: warm-up, working, **myo-reps** (guided), and **lengthened partials** (as separate sets). Each set records weight, reps and RIR.
 - **Myo-rep guidance**: after the activation set the app sets a mini-set target of about ⅓ of the activation reps (3–5), starts a 15 s breathing timer, and ends the myo-rep set when a mini-set misses the target (or after 5 mini-sets).
 - **Supersets**: give consecutive exercises the same letter. You get a short transition timer between them and the full rest after the round.
+- **Start set / Done**: the bar at the bottom of a workout shows the rest timer and the next set, with **▶ Start set**. During the set it shows the set time and **■ Done**; Done timestamps the end and opens the panel to enter reps (the next rest starts from Done).
+  - Each set records the **actual rest** (previous Done → Start), the **planned rest**, and the **set duration**.
+  - Plain ✓ still works: the rest is then estimated (gap minus ~40 s) and marked estimated.
+  - The Progress tab points out when a stall or regression came with a rest notably shorter than planned.
 - **Timers**:
   - The whole workout is timed.
   - A rest timer starts after every set, with separate defaults for warm-ups, myo mini-sets and superset transitions.

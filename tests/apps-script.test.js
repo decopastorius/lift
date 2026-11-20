@@ -149,6 +149,15 @@ test('readProgram returns the coach Block tabs (not the log tabs) and the settin
   const { post } = load([new Sheet('Block 2', [['', '', 'Upper 1', 'Sets']]), new Sheet('Block 2 log', [['Exercise']]), settings, new Sheet('Nutrition', [['long']])]);
   const r = post({ action: 'readProgram' });
   assert.deepEqual(Object.keys(r.tabs), ['Block 2']);
-  assert.equal(r.version, 5);
+  assert.equal(r.version, 6);
   assert.equal(r.settings[1][3], 'Bench 5');
+});
+
+test('Summary/Sets header row is extended when a new version adds columns', () => {
+  const sets = new Sheet('Sets', [['Session ID', 'Date'], ['old', '2026-11-01']]);
+  const { post } = load([sets]);
+  post({ sessionId: 'n', setHeaders: ['Session ID', 'Date', 'Rest planned (s)'], sets: [['n', '2026-11-23', 180]], summaryHeaders: ['Session ID'], summary: [['n']] });
+  assert.deepEqual(sets.v[0], ['Session ID', 'Date', 'Rest planned (s)']);
+  assert.deepEqual(sets.v[1], ['old', '2026-11-01'], 'old rows kept');
+  assert.deepEqual(sets.v[2], ['n', '2026-11-23', 180]);
 });

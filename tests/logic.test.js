@@ -4,6 +4,7 @@ import { suggest, labelSets, SET } from '../src/progression.js';
 import { myoNext, miniTarget } from '../src/myo.js';
 import {
   startSession, logSet, unlogSet, finishSession, endMyoBlock, addSet, historyFor, DEFAULT_SETTINGS,
+  startSet, endSet, cancelSet, nextPendingSet,
 } from '../src/session-logic.js';
 import { buildPayload, SET_HEADERS, SUMMARY_HEADERS } from '../src/sheets.js';
 
@@ -121,7 +122,8 @@ test('full session flow: plan, log, myo, superset rest, finish, sheet rows', () 
   // working set 1 with target reps auto-filled; superset -> short transition
   s = logSet(s, b.id, s.exercises[0].sets[1].id, { now: 62000 });
   assert.equal(s.exercises[0].sets[1].reps, 8);
-  assert.equal(s.exercises[0].sets[1].restBefore, 60);
+  assert.equal(s.exercises[0].sets[1].restBefore, 20, 'no Start tap: 60 s between sets minus ~40 s for the set');
+  assert.equal(s.exercises[0].sets[1].restMeasured, false);
   assert.equal(s.restTarget, DEFAULT_SETTINGS.supersetRest);
   // pull-up (last in group) -> full rest
   s.exercises[1].sets[0].reps = 8;
@@ -255,4 +257,48 @@ test('deload workout: last load, RIR 3-4, no rep targets, and it does not count 
   assert.deepEqual([next.week, next.cycle, next.deload], [1, 2, false]);
   assert.equal(next.exercises[0].suggestion.action, 'increase', 'based on week 7, ignoring the deload');
   assert.equal(next.exercises[0].rir, '1-2');
+});
+
+test('Start set / Done: real rest, planned rest and set duration', () => {
+  const tpl = { id: 't', name: 'T', items: [{ id: 'i', exerciseId: 'bench', sets: 3, rest: 180, restCustom: true }] };
+  let s = startSession({ template: tpl, exercisesById: { bench: ex }, sessions: [], settings: DEFAULT_SETTINGS, now: 0 });
+  const id = (i) => s.exercises[0].sets[i].id;
+  const sec = (x) => x * 1000;
+  // set 1: start at 10 s, done at 50 s, reps entered at 70 s
+  s = startSet(s, sec(10));
+  s = endSet(s, sec(50));
+  s.exercises[0].sets[0].reps = 10;
+  s = logSet(s, s.exercises[0].id, id(0), { now: sec(70) });
+  let set = s.exercises[0].sets[0];
+  assert.deepEqual([set.startedAt, set.completedAt, set.duration, set.restBefore], [sec(10), sec(50), 40, null]);
+  assert.equal(s.lastSetAt, sec(50), 'rest runs from Done, not from entering the reps');
+  assert.equal(s.restTarget, 180);
+  // set 2: went early, 2:00 into a 3:00 rest
+  s = startSet(s, sec(170));
+  s = endSet(s, sec(205));
+  s.exercises[0].sets[1].reps = 9;
+  s = logSet(s, s.exercises[0].id, id(1), { now: sec(220) });
+  set = s.exercises[0].sets[1];
+  assert.deepEqual([set.restBefore, set.restTarget, set.restMeasured, set.duration], [120, 180, true, 35]);
+  // set 3: Start tapped by mistake, cancelled, then logged with plain ✓ -> estimated
+  s = cancelSet(startSet(s, sec(260)));
+  s.exercises[0].sets[2].reps = 8;
+  s = logSet(s, s.exercises[0].id, id(2), { now: sec(500) });
+  set = s.exercises[0].sets[2];
+  assert.deepEqual([set.restBefore, set.restMeasured, set.duration], [255, false, null], '(500 - 205) s gap minus ~40 s for the set');
+});
+
+test('next set: workout order, superset-aware', () => {
+  const curl = { id: 'curl', name: 'Curl', repMin: 10, repMax: 15, increment: 5 };
+  const tpl = { id: 't', name: 'T', items: [
+    { id: 'a', exerciseId: 'bench', sets: 2, group: 'A' }, { id: 'b', exerciseId: 'curl', sets: 2, group: 'A' },
+  ] };
+  let s = startSession({ template: tpl, exercisesById: { bench: ex, curl }, sessions: [], settings: DEFAULT_SETTINGS, now: 0 });
+  assert.equal(nextPendingSet(s).exercise.exerciseId, 'bench');
+  s.exercises[0].sets[0].reps = 10;
+  s = logSet(s, s.exercises[0].id, s.exercises[0].sets[0].id, { now: 1000 });
+  assert.equal(nextPendingSet(s).exercise.exerciseId, 'curl', 'superset: alternate');
+  s.exercises[1].sets[0].reps = 12;
+  s = logSet(s, s.exercises[1].id, s.exercises[1].sets[0].id, { now: 2000 });
+  assert.equal(nextPendingSet(s).set.id, s.exercises[0].sets[1].id, 'back to bench set 2');
 });

@@ -8,6 +8,7 @@ import { fmtDate, fmtTime, fmtLoad } from './util.js';
 export const SET_HEADERS = [
   'Session ID', 'Date', 'Start', 'Session', 'Location', 'Exercise', 'Superset', 'Set', 'Set type',
   'Weight (lb)', 'Bodyweight', 'Reps', 'RIR', 'Rest before (s)', 'Logged at',
+  'Rest planned (s)', 'Rest measured', 'Set duration (s)',
 ];
 
 export const SUMMARY_HEADERS = [
@@ -40,6 +41,7 @@ export function buildPayload(raw, { exercisesById, locationsById, sessions, rule
         session.id, date, fmtTime(session.startedAt), session.name, loc, ex.name, e.group || '',
         labels[j], SET_NAME[s.type] || s.type, s.weight ?? '', ex.bodyweight ? 'yes' : '',
         s.reps, s.rir ?? '', s.restBefore ?? '', s.completedAt ? fmtTime(s.completedAt) : '',
+        s.restTarget ?? '', s.restBefore == null ? '' : s.restMeasured ? 'yes' : 'estimated', s.duration ?? '',
       ]);
     });
 

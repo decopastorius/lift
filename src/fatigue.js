@@ -23,7 +23,15 @@ export function performance(sets) {
   const load = Math.max(...pool.map((s) => s.weight || 0));
   const top = pool.filter((s) => (s.weight || 0) === load);
   const rirs = top.map((s) => s.rir).filter((x) => x != null && Number.isFinite(x));
-  return { load, reps: top.map((s) => s.reps), meanReps: mean(top.map((s) => s.reps)), rir: rirs.length ? mean(rirs) : null };
+  // rest before the 2nd+ sets (the first set's rest belongs to whatever came before)
+  const rested = pool.slice(1).filter((s) => s.restBefore != null && s.restTarget);
+  const measured = rested.filter((s) => s.restMeasured);
+  const use = measured.length ? measured : rested;
+  const rest = use.length ? {
+    taken: mean(use.map((s) => s.restBefore)), planned: mean(use.map((s) => s.restTarget)),
+    measured: measured.length > 0,
+  } : null;
+  return { load, reps: top.map((s) => s.reps), meanReps: mean(top.map((s) => s.reps)), rir: rirs.length ? mean(rirs) : null, rest };
 }
 
 export function classify(prev, cur) {
@@ -83,7 +91,11 @@ export function exerciseStatus(list) {
   else if (last3.length === 3 && !last3.includes('P')) key = 'stalled';
   else if (codes.at(-1) === 'G' || grindTrend) key = 'grinding';
   else if (last3.includes('P')) key = 'progressing';
-  return { key, since, codes };
+  // was the rest notably shorter than planned when it went flat/backwards?
+  const last = list.at(-1);
+  const shortRest = last?.rest && ['F', 'G', 'R'].includes(last.code) && last.rest.taken < last.rest.planned * 0.8
+    ? { taken: last.rest.taken, planned: last.rest.planned, measured: last.rest.measured } : null;
+  return { key, since, codes, shortRest };
 }
 
 /** Share of exposures in each program week that progressed (deload weeks have none). */

@@ -346,3 +346,14 @@ textarea { resize: vertical; }
 .viz .block-sep { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 3; }
 .viz .block-lbl { font-size: 8px; }
 .heat th.sticky { position: sticky; left: 0; background: var(--card); z-index: 1; }
+
+.rest-bar.action .rest-content { gap: 8px; }
+.rest-bar .btn.big { min-height: 52px; padding: 0 18px; font-size: 1.05rem; flex: none; }
+.rest-bar .rest-text { min-width: 0; }
+.rest-bar .rest-text small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+.rest-bar .rest-text strong.sm { font-size: 1.05rem; }
+.rest-bar .adj { display: flex; flex-direction: column; }
+.rest-bar .adj .btn { min-height: 26px; padding: 0 8px; }
+.rest-bar.in-set { background: color-mix(in srgb, var(--accent) 12%, var(--card)); }
+.es-note { font-size: .78rem; color: var(--muted); margin-top: 4px; }
+.rest-bar .rest-text .next { font-size: .8rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

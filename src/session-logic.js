@@ -126,6 +126,51 @@ function hasLaterInGroup(session, exIdx) {
   return session.exercises.slice(exIdx + 1).some((e) => e.group === g);
 }
 
+/** Typical time a set takes, used to estimate rest when "Start set" wasn't tapped. */
+export const EST_SET_SECONDS = 40;
+
+/** "▶ Start set": the rest is over and a set has begun. */
+export function startSet(session, now = Date.now()) {
+  return { ...session, pendingStart: now, pendingEnd: null };
+}
+
+/** "■ Done": the set has ended (reps are entered after, without the clock running). */
+export function endSet(session, now = Date.now()) {
+  return { ...session, pendingStart: session.pendingStart ?? null, pendingEnd: now };
+}
+
+export function cancelSet(session) {
+  return { ...session, pendingStart: null, pendingEnd: null };
+}
+
+/**
+ * The set you're most likely doing next: in a superset, the next exercise of the group that still has
+ * sets to do; otherwise the first set not done yet, in workout order.
+ */
+export function nextPendingSet(session) {
+  const pending = (e) => e.sets.find((x) => !x.done);
+  let lastEx = null;
+  let lastAt = -1;
+  for (const e of session.exercises) {
+    for (const x of e.sets) if (x.done && (x.completedAt || 0) > lastAt) { lastAt = x.completedAt || 0; lastEx = e; }
+  }
+  if (lastEx?.group) {
+    const group = session.exercises.filter((e) => e.group === lastEx.group);
+    const i = group.indexOf(lastEx);
+    for (let k = 1; k <= group.length; k++) {
+      const e = group[(i + k) % group.length];
+      const set = pending(e);
+      if (set) return { exercise: e, set };
+    }
+  }
+  if (lastEx && pending(lastEx)) return { exercise: lastEx, set: pending(lastEx) };
+  for (const e of session.exercises) {
+    const set = pending(e);
+    if (set) return { exercise: e, set };
+  }
+  return null;
+}
+
 /** Mark a set as done, record rest taken, start the right rest timer, drive myo-reps. */
 export function logSet(session, exId, setId, { now = Date.now(), settings = DEFAULT_SETTINGS, bodyweight = false } = {}) {
   const s = clone(session);
@@ -136,10 +181,29 @@ export function logSet(session, exId, setId, { now = Date.now(), settings = DEFA
   if (set.reps == null) set.reps = set.target ?? null;
   if (set.reps == null) return session; // nothing to log
   if (set.weight == null) set.weight = bodyweight ? 0 : null;
+  // Timing. "Start set" / "Done" (if tapped) give the real start and end of the set; the rest
+  // before it is then measured from the previous set's end. Without "Start set", the rest is
+  // estimated as the gap between sets minus a typical set duration, and marked as estimated.
+  const end = s.pendingEnd ?? now;
+  const start = s.pendingStart != null && s.pendingStart <= end ? s.pendingStart : null;
   set.done = true;
-  set.completedAt = now;
-  set.restBefore = s.lastSetAt ? Math.round((now - s.lastSetAt) / 1000) : null;
-  s.lastSetAt = now;
+  set.completedAt = end;
+  set.startedAt = start;
+  set.duration = start != null ? Math.round((end - start) / 1000) : null;
+  set.restTarget = s.restTarget ?? null;
+  if (s.lastSetAt && start != null) {
+    set.restBefore = Math.max(0, Math.round((start - s.lastSetAt) / 1000));
+    set.restMeasured = true;
+  } else if (s.lastSetAt) {
+    set.restBefore = Math.max(0, Math.round((end - s.lastSetAt) / 1000) - EST_SET_SECONDS);
+    set.restMeasured = false;
+  } else {
+    set.restBefore = null;
+    set.restMeasured = false;
+  }
+  s.lastSetAt = end;
+  s.pendingStart = null;
+  s.pendingEnd = null;
 
   // Carry the load forward to later sets whose weight wasn't typed by hand
   // (warm-up loads are never carried into work sets).

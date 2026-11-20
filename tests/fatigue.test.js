@@ -131,3 +131,14 @@ test('an exercise done only as lengthened partials still gets progression', () =
   assert.equal(sug.action, 'increase');
   assert.equal(sug.weight, 45);
 });
+
+test('a stall with a rushed rest is pointed out', () => {
+  const R = (w, r, rest, measured = true) => ({ type: SET.WORKING, weight: w, reps: r, done: true, restBefore: rest, restTarget: 180, restMeasured: measured });
+  const mk = (i, sets) => session('r' + i, 2, i + 1, i, { row: sets });
+  const list = exposures('row', [mk(0, [R(160, 10, null), R(160, 10, 185)]), mk(1, [R(160, 10, null), R(160, 8, 95)])]);
+  const st = exerciseStatus(list);
+  assert.deepEqual(st.shortRest, { taken: 95, planned: 180, measured: true });
+  // properly rested regression: no note
+  const list2 = exposures('row', [mk(0, [R(160, 10, null), R(160, 10, 185)]), mk(1, [R(160, 10, null), R(160, 8, 190)])]);
+  assert.equal(exerciseStatus(list2).shortRest, null);
+});

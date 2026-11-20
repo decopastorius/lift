@@ -4,7 +4,7 @@ import { SET, labelSets } from '../progression.js';
 import { myoNext, blockSets } from '../myo.js';
 import {
   logSet, unlogSet, addSet, removeSet, endMyoBlock, finishSession, buildSessionExercise,
-  suggestionFor, newPlanItem, itemsFromSession,
+  suggestionFor, newPlanItem, itemsFromSession, startSet, endSet, cancelSet, nextPendingSet,
 } from '../session-logic.js';
 import { NumInput, Modal, ExercisePicker, Field, NoteField, go, Empty, confirmAction } from '../components.js';
 import { weightOptions, repOptions, RIR_OPTIONS, DEFAULT_NOTE_PRESETS } from '../pickers.js';
@@ -24,6 +24,7 @@ export function SessionView() {
   const s = activeSession();
   const [picker, setPicker] = useState(false);
   const [finishing, setFinishing] = useState(false);
+  const [openSet, setOpenSet] = useState(null); // asks a card to open a set's panel (from Done)
   useEffect(() => {
     if (state.settings.keepAwake) keepAwake(true);
     return () => keepAwake(false);
@@ -54,7 +55,7 @@ export function SessionView() {
     <${SessionHeader} s=${s} loc=${loc} onFinish=${() => setFinishing(true)} update=${update} />
     ${s.exercises.length === 0 && html`<${Empty}>Add your first exercise to get going.<//>`}
     ${blocks.map((b) => {
-      const cards = b.items.map(([e, i]) => html`<${ExerciseCard} key=${e.id} s=${s} se=${e} idx=${i}
+      const cards = b.items.map(([e, i]) => html`<${ExerciseCard} key=${e.id} s=${s} se=${e} idx=${i} openSet=${openSet}
         exercise=${exById[e.exerciseId]} locationId=${s.locationId} update=${update} />`);
       return b.group && b.items.length > 1
         ? html`<div class="superset"><div class="superset-tag">Superset ${b.group}</div>${cards}</div>`
@@ -65,7 +66,7 @@ export function SessionView() {
       <${NoteField} value=${s.notes} presets=${(state.settings.notePresets || DEFAULT_NOTE_PRESETS).session}
         onChange=${(v) => update({ ...s, notes: v }, 400)} placeholder="Anything else for your coach" />
     <//>
-    <${RestBar} s=${s} update=${update} />
+    <${ActionBar} s=${s} update=${update} exById=${exById} onOpenSet=${(setId) => setOpenSet({ setId, at: Date.now() })} />
     ${picker && html`<${ExercisePicker} onPick=${addExercise} onClose=${() => setPicker(false)} />`}
     ${finishing && html`<${FinishModal} s=${s} onClose=${() => setFinishing(false)} />`}
   </div>`;
@@ -96,30 +97,70 @@ function SessionHeader({ s, loc, onFinish, update }) {
   </header>`;
 }
 
-function RestBar({ s, update }) {
+/**
+ * The bar at the bottom of a workout. Rest → "▶ Start set" → set in progress → "■ Done" → enter reps.
+ * Start/Done timestamp the set, so the real rest and the set's duration are recorded.
+ */
+function ActionBar({ s, update, exById, onOpenSet }) {
   useTick(250);
   const beeped = useRef('');
-  if (!s.lastSetAt || s.restTarget == null) return null;
-  const elapsed = (Date.now() - s.lastSetAt) / 1000;
-  const remaining = s.restTarget - elapsed;
+  const next = nextPendingSet(s);
+  const nextText = next && (() => {
+    const ex = exById[next.exercise.exerciseId];
+    const labels = labelSets(next.exercise.sets);
+    const i = next.exercise.sets.indexOf(next.set);
+    const w = next.set.weight != null ? (ex?.bodyweight && !next.set.weight ? 'BW' : next.set.weight) : null;
+    const reps = next.set.target ?? null;
+    return `${ex?.name || 'Next'} · ${labels[i]}${w != null ? ` · ${w}${reps ? ' × ' + reps : ''}` : ''}`;
+  })();
+  const now = Date.now();
+
+  // 3. set finished: enter reps
+  if (s.pendingEnd) {
+    return html`<div class="rest-bar action" role="status">
+      <div class="rest-content">
+        <div class="rest-text"><small>Set done${s.pendingStart ? ` in ${fmtClock((s.pendingEnd - s.pendingStart) / 1000)}` : ''}</small>
+          <strong class="sm">Enter reps &amp; RIR</strong></div>
+        ${next && html`<button class="btn primary" onClick=${() => onOpenSet(next.set.id)}>Enter</button>`}
+        <button class="icon-btn" aria-label="Cancel" onClick=${() => update(cancelSet(s))}>✕</button>
+      </div>
+    </div>`;
+  }
+  // 2. set in progress
+  if (s.pendingStart) {
+    return html`<div class="rest-bar action in-set" role="timer">
+      <div class="rest-content">
+        <div class="rest-text"><small>Set in progress</small>
+          <strong>${fmtClock((now - s.pendingStart) / 1000)}</strong>
+          ${nextText && html`<span class="next">${nextText}</span>`}</div>
+        <button class="btn primary big" onClick=${() => { update(endSet(s)); if (next) onOpenSet(next.set.id); }}>■ Done</button>
+        <button class="icon-btn" aria-label="Cancel set start" onClick=${() => update(cancelSet(s))}>✕</button>
+      </div>
+    </div>`;
+  }
+  if (!next) return null;
+  // 1. resting (timer running) or ready (no timer)
+  const resting = s.lastSetAt && s.restTarget != null;
+  const elapsed = resting ? (now - s.lastSetAt) / 1000 : 0;
+  const remaining = resting ? s.restTarget - elapsed : 0;
   const key = `${s.lastSetAt}:${s.restTarget}`;
-  if (remaining <= 0 && beeped.current !== key) {
+  if (resting && remaining <= 0 && beeped.current !== key) {
     beeped.current = key;
     if (state.settings.sound) beep();
   }
-  const pct = Math.min(100, (elapsed / Math.max(1, s.restTarget)) * 100);
-  const over = remaining <= 0;
+  const over = resting && remaining <= 0;
+  const pct = resting ? Math.min(100, (elapsed / Math.max(1, s.restTarget)) * 100) : 0;
   const adj = (d) => update({ ...s, restTarget: Math.max(0, s.restTarget + d) });
-  return html`<div class=${'rest-bar' + (over ? ' over' : '')} role="timer">
-    <div class="rest-progress" style=${`width:${pct}%`}></div>
+  return html`<div class=${'rest-bar action' + (over ? ' over' : '')} role="timer">
+    ${resting && html`<div class="rest-progress" style=${`width:${pct}%`}></div>`}
     <div class="rest-content">
       <div class="rest-text">
-        <small>${over ? 'Go! ' : ''}${s.restLabel || 'Rest'}</small>
-        <strong>${over ? '+' + fmtClock(-remaining) : fmtClock(remaining)}</strong>
+        <small>${resting ? `${over ? 'Rest over · ' : ''}${s.restLabel || 'Rest'}` : 'Ready for the first set'}</small>
+        ${resting && html`<strong>${over ? '+' + fmtClock(-remaining) : fmtClock(remaining)}</strong>`}
+        ${nextText && html`<span class="next">Next: ${nextText}</span>`}
       </div>
-      <button class="btn small ghost" onClick=${() => adj(-15)}>−15</button>
-      <button class="btn small ghost" onClick=${() => adj(15)}>+15</button>
-      <button class="icon-btn" aria-label="Hide rest timer" onClick=${() => update({ ...s, restTarget: null })}>✕</button>
+      ${resting && html`<div class="adj"><button class="btn small ghost" onClick=${() => adj(-15)}>−15</button><button class="btn small ghost" onClick=${() => adj(15)}>+15</button></div>`}
+      <button class="btn primary big" onClick=${() => { unlockAudio(); update(startSet(s)); }}>▶ Start set</button>
     </div>
   </div>`;
 }
@@ -142,11 +183,17 @@ function Target({ sug, exercise, deload }) {
   </div>`;
 }
 
-function ExerciseCard({ s, se, idx, exercise, locationId, update }) {
+function ExerciseCard({ s, se, idx, exercise, locationId, update, openSet }) {
   const [menu, setMenu] = useState(false);
   const [setupOpen, setSetupOpen] = useState(false);
   const [showNotes, setShowNotes] = useState(!!se.notes);
   const [editing, setEditing] = useState(null); // { setId, focus }
+  useEffect(() => {
+    if (openSet && se.sets.some((x) => x.id === openSet.setId)) {
+      setEditing({ setId: openSet.setId, focus: 'reps' });
+      document.getElementById('ex-' + se.id)?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [openSet?.at]);
   if (!exercise) exercise = { name: '(deleted exercise)', repMin: 8, repMax: 12, setups: {} };
   const labels = labelSets(se.sets);
   const setup = exercise.setups?.[locationId] || exercise.setups?.any;
@@ -201,7 +248,7 @@ function ExerciseCard({ s, se, idx, exercise, locationId, update }) {
           <button class=${'check' + (set.done ? ' on' : '')} aria-label=${set.done ? 'Undo set' : 'Log set'} onClick=${() => toggle(set)}>✓</button>
           ${!set.done
             ? html`<button class="x" aria-label="Remove set" onClick=${() => update(removeSet(s, se.id, set.id))}>×</button>`
-            : html`<span class="rest-taken">${set.restBefore != null ? fmtClock(set.restBefore) : ''}</span>`}
+            : html`<span class="rest-taken" title=${set.restMeasured ? 'rest (measured)' : 'rest (estimated)'}>${set.restBefore != null ? (set.restMeasured ? '' : '~') + fmtClock(set.restBefore) : ''}</span>`}
         </div>
         ${lastOfBlock[set.id] != null && html`<${MyoGuide} se=${se} block=${lastOfBlock[set.id]}
           onEnd=${() => update(endMyoBlock(s, se.id, lastOfBlock[set.id]))} />`}

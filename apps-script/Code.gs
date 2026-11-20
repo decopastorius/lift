@@ -26,7 +26,7 @@
  * It also lets the app read the Block tabs and the equipment-settings tab ("Import from Google Sheet").
  */
 const SECRET = 'change-me';
-const SCRIPT_VERSION = 5;                   // the app checks this to tell you when the script needs updating
+const SCRIPT_VERSION = 6;                   // the app checks this to tell you when the script needs updating
 const SHEET_ID = '';                         // only for a standalone script project; leave empty otherwise
 const LOG_TAB = (block) => 'Block ' + block + ' log';   // where workouts are written
 const SETTINGS_TAB = '_Workout_Equipment_Settings';
@@ -77,6 +77,10 @@ function upsert(ss, name, headers, rows, sessionId) {
     sh.appendRow(headers);
     sh.setFrozenRows(1);
     sh.getRange(1, 1, 1, headers.length).setFontWeight('bold');
+  } else {
+    // new columns added in a later version: extend the header row
+    const current = sh.getRange(1, 1, 1, headers.length).getDisplayValues()[0];
+    if (current.join('|') !== headers.join('|')) sh.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
   }
   removeSessionRows(sh, sessionId);
   if (rows && rows.length) {

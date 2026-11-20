@@ -69,7 +69,7 @@ export function HistoryView({ id }) {
             <${NumInput} decimal value=${x.weight} label="Weight" onChange=${(v) => patchSet(e.id, x.id, { weight: v })} />
             <${NumInput} value=${x.reps} label="Reps" onChange=${(v) => patchSet(e.id, x.id, { reps: v })} />
             <${NumInput} value=${x.rir} label="RIR" placeholder="–" onChange=${(v) => patchSet(e.id, x.id, { rir: v })} />
-            <span class="rest-taken">${x.restBefore != null ? fmtClock(x.restBefore) : ''}</span>
+            <span class="rest-taken" title=${x.restMeasured ? 'rest (measured)' : 'rest (estimated)'}>${x.restBefore != null ? (x.restMeasured ? '' : '~') + fmtClock(x.restBefore) : ''}</span>
             <button class="x" aria-label="Delete set" onClick=${() => confirmAction('Delete this set?') && delSet(e.id, x.id)}>×</button>
           </div>`)}
         </div>
