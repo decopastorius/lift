@@ -23,6 +23,7 @@ export function buildPayload(session, { exercisesById, locationsById, sessions, 
   const date = fmtDate(session.startedAt);
   const week = weekOf(session, sessions);
   const logs = {};
+  const notes = {};
   const loc = locationsById[session.locationId]?.name || '';
   const duration = session.endedAt ? Math.round((session.endedAt - session.startedAt) / 6000) / 10 : '';
   const sets = [];
@@ -44,6 +45,7 @@ export function buildPayload(session, { exercisesById, locationsById, sessions, 
     const loads = [...new Set(working.map((s) => s.weight ?? 0))];
     const log = formatLog(logged, !!ex.bodyweight);
     if (log) logs[e.exerciseId] = logs[e.exerciseId] ? `${logs[e.exerciseId]} | ${log}` : log;
+    if (e.notes) notes[e.exerciseId] = notes[e.exerciseId] ? `${notes[e.exerciseId]}; ${e.notes}` : e.notes;
     const volume = logged
       .filter((s) => s.type !== SET.WARMUP)
       .reduce((a, s) => a + (s.weight || 0) * (s.reps || 0), 0);
@@ -64,11 +66,11 @@ export function buildPayload(session, { exercisesById, locationsById, sessions, 
   // The coach's layout: a block per workout, a row per exercise, a column per week.
   const locations = Object.values(locationsById);
   const rows = programRows({ workout: session.name, templates, locations, exercisesById, session, layout })
-    .map((r) => ({ ...r, log: logs[r.exerciseId] || '' }));
+    .map((r) => ({ ...r, log: logs[r.exerciseId] || '', note: notes[r.exerciseId] || '' }));
   const minutes = session.endedAt ? Math.round((session.endedAt - session.startedAt) / 60000) : 0;
   const program = {
-    workout: session.name, week, duration: minutes ? `${minutes}'` : '',
-    rows: rows.map(({ tag, name, sets, reps, rir, progression, rest, log }) => ({ tag, name, sets, reps, rir, progression, rest, log })),
+    workout: session.name, week, duration: minutes ? `${minutes}'` : '', note: session.notes || '',
+    rows: rows.map(({ tag, name, sets, reps, rir, progression, rest, log, note }) => ({ tag, name, sets, reps, rir, progression, rest, log, note })),
   };
 
   return {

@@ -145,19 +145,25 @@ function weekColumn(block, week) {
   return col;
 }
 
-/** Write a log cell; the note remembers which workout wrote it so a re-send replaces it. */
-function writeCell(range, text, sessionId) {
+/**
+ * Write a log cell. Your notes for the coach go in the cell's note (hover to read), followed by
+ * a "lift-log:<id>" line that remembers which workout wrote it, so a re-send replaces it.
+ */
+function writeCell(range, text, sessionId, comment) {
   const tag = 'lift-log:' + sessionId;
   const note = range.getNote();
   const current = range.getDisplayValue();
+  const mine = note.indexOf(tag) !== -1;
+  const owners = (note.match(/lift-log:/g) || []).length;
+  const newNote = (comment ? comment + '\n' : '') + tag;
   range.setNumberFormat('@');
-  if (!current || note === tag || current === text) {
+  if (!current || current === text || (mine && owners === 1)) {
     range.setValue(text);
-    range.setNote(tag);
-  } else if (note.indexOf(tag) === -1) {
+    range.setNote(newNote);
+  } else if (!mine) {
     // a second workout in the same week: keep both
     range.setValue(current + '\n' + text);
-    range.setNote(note ? note + '\n' + tag : tag);
+    range.setNote(note ? note + '\n' + newNote : newNote);
   }
 }
 
@@ -181,12 +187,12 @@ function writeProgram(ss, p, sessionId) {
   }
   const col = weekColumn(block, p.week);
   for (const r of p.rows) {
-    if (r.log && block.rows[norm(r.name)]) writeCell(block.sh.getRange(block.rows[norm(r.name)], col), r.log, sessionId);
+    if (r.log && block.rows[norm(r.name)]) writeCell(block.sh.getRange(block.rows[norm(r.name)], col), r.log, sessionId, r.note);
   }
   // session time goes in the row right under the block, if that row is free
   const below = block.sh.getRange(block.last + 1, 2);
   if (p.duration && !String(below.getDisplayValue()).trim()) {
-    writeCell(block.sh.getRange(block.last + 1, col), p.duration, sessionId);
+    writeCell(block.sh.getRange(block.last + 1, col), p.duration, sessionId, p.note);
   }
 }
 

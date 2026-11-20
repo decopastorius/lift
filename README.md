@@ -16,6 +16,8 @@ whenever you're online, but logging never depends on the sheet.
   - Warm-ups, partials and back-off sets are ignored. If an exercise was done only as myo-reps, its activation set counts.
 - **Equipment setup** per exercise per location (equipment, seat height, bench angle, pins, grip…). It's shown on the exercise card during a workout.
 - **Exercise library**: comes with a starter list, you can bulk-import your own (`Name, Category, 8-12, 5, bw`), and you can create exercises in the middle of a workout.
+- **Tap to log**: tapping a set's weight, reps or RIR opens a panel of options to tap (loads in steps around the suggestion, with ◀ ▶ to shift; reps around the range with the target highlighted; RIR 0–5), each with a box to type in, and a **Log set** button.
+- **Quick notes**: preset notes for exercises and the session (editable in More), plus free text. In the coach's sheet they appear as a cell note on that week's entry.
 - **Set types**: warm-up, working, **myo-reps** (guided), and **lengthened partials** (as separate sets). Each set records weight, reps and RIR.
 - **Myo-rep guidance**: after the activation set the app sets a mini-set target of about ⅓ of the activation reps (3–5), starts a 15 s breathing timer, and ends the myo-rep set when a mini-set misses the target (or after 5 mini-sets).
 - **Supersets**: give consecutive exercises the same letter. You get a short transition timer between them and the full rest after the round.

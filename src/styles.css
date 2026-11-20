@@ -251,3 +251,22 @@ textarea { resize: vertical; }
 .sh-meta .wk .num { width: 2.6rem; }
 .preview-session { margin: 6px 0; padding: 6px 8px; background: var(--input); border-radius: 8px; }
 .preview-session ul { margin: 4px 0 0; padding-left: 18px; }
+
+.cell { height: 42px; border-radius: 10px; border: 1px solid transparent; background: var(--input); color: var(--text);
+  font: inherit; font-variant-numeric: tabular-nums; text-align: center; padding: 0 4px; cursor: pointer; min-width: 0; }
+.cell.empty { color: var(--muted); }
+.set-row.done .cell { background: var(--good-bg); }
+.pick-group { margin: 6px 0 14px; }
+.pick-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.pick-head > span { font-weight: 700; }
+.pick-head small { flex: 1; }
+.pick-head .num { width: 84px; margin-left: auto; padding: 6px 8px; text-align: center; }
+.pick-chips { display: grid; grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); gap: 6px; }
+.pick { min-height: 46px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--text);
+  font: inherit; font-weight: 600; font-variant-numeric: tabular-nums; cursor: pointer; }
+.pick.tgt { border-color: var(--accent); }
+.pick.on { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+.note-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.note-chips .chip { font-size: .82rem; padding: 4px 10px; min-height: 32px; }
+.pick.shift { color: var(--accent); background: var(--input); border-color: transparent; }
+.log-bar { position: sticky; bottom: -16px; background: var(--card); padding: 4px 0 12px; margin-bottom: -16px; }

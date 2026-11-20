@@ -3,7 +3,8 @@ import { state, save, remove, byId } from '../store.js';
 import { labelSets, SET_NAME } from '../progression.js';
 import { itemsFromSession } from '../session-logic.js';
 import { formatLog, weekOf } from '../program.js';
-import { NumInput, Field, go, Empty, confirmAction, saveBackupFile } from '../components.js';
+import { NumInput, Field, NoteField, go, Empty, confirmAction, saveBackupFile } from '../components.js';
+import { DEFAULT_NOTE_PRESETS } from '../pickers.js';
 import { fmtClock, fmtNiceDate, fmtTime, uid } from '../util.js';
 import { syncNow, markBackupNeeded } from '../sync.js';
 import { begin } from './train.js';
@@ -75,7 +76,7 @@ export function HistoryView({ id }) {
     })}
 
     <${Field} label="Session notes">
-      <textarea rows="3" value=${s.notes} onInput=${(ev) => update({ ...s, notes: ev.target.value })}></textarea>
+      <${NoteField} value=${s.notes} presets=${(state.settings.notePresets || DEFAULT_NOTE_PRESETS).session} onChange=${(v) => update({ ...s, notes: v })} />
     <//>
     <p class="muted small">Set legend: W = warm-up, numbers = working sets, MA/M = myo activation/mini-sets, P = lengthened partials.</p>
     <button class="btn block danger ghost" onClick=${async () => {

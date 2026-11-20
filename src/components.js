@@ -2,6 +2,7 @@ import { html, useState, useEffect, useRef } from './vendor/preact-htm.js';
 import { state, save, exportBackup } from './store.js';
 import { newExercise } from './seed.js';
 import { num, byName, fmtDate } from './util.js';
+import { hasNote, toggleNote } from './pickers.js';
 
 export const go = (path) => { location.hash = path; };
 
@@ -124,4 +125,13 @@ export async function saveBackupFile() {
   a.download = file.name;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+
+/** Preset notes you tap to add/remove, plus free text. */
+export function NoteField({ value, onChange, presets = [], placeholder = '', rows = 2 }) {
+  return html`<div class="note-field">
+    <div class="note-chips">${presets.map((p) => html`<button type="button" class=${'chip' + (hasNote(value, p) ? ' on' : '')}
+      onClick=${() => onChange(toggleNote(value, p))}>${p}</button>`)}</div>
+    <textarea rows=${rows} placeholder=${placeholder} value=${value || ''} onInput=${(e) => onChange(e.target.value)}></textarea>
+  </div>`;
 }

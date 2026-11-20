@@ -6,7 +6,8 @@ import {
   logSet, unlogSet, addSet, removeSet, endMyoBlock, finishSession, buildSessionExercise,
   suggestionFor, newPlanItem, itemsFromSession,
 } from '../session-logic.js';
-import { NumInput, Modal, ExercisePicker, Field, go, Empty, confirmAction } from '../components.js';
+import { NumInput, Modal, ExercisePicker, Field, NoteField, go, Empty, confirmAction } from '../components.js';
+import { weightOptions, repOptions, RIR_OPTIONS, DEFAULT_NOTE_PRESETS } from '../pickers.js';
 import { fmtClock, fmtNiceDate, fmtLoad, uid } from '../util.js';
 import { beep, unlockAudio, keepAwake } from '../device.js';
 import { syncNow, markBackupNeeded } from '../sync.js';
@@ -61,7 +62,8 @@ export function SessionView() {
     })}
     <button class="btn block add-ex" onClick=${() => setPicker(true)}>＋ Add exercise</button>
     <${Field} label="Session notes (for your coach)">
-      <textarea rows="2" value=${s.notes} onInput=${(e) => update({ ...s, notes: e.target.value }, 400)}></textarea>
+      <${NoteField} value=${s.notes} presets=${(state.settings.notePresets || DEFAULT_NOTE_PRESETS).session}
+        onChange=${(v) => update({ ...s, notes: v }, 400)} placeholder="Anything else for your coach" />
     <//>
     <${RestBar} s=${s} update=${update} />
     ${picker && html`<${ExercisePicker} onPick=${addExercise} onClose=${() => setPicker(false)} />`}
@@ -81,7 +83,7 @@ function SessionHeader({ s, loc, onFinish, update }) {
           ${state.locations.map((l) => html`<option value=${l.id}>${l.name}</option>`)}
         </select>
         <label class="wk">Wk <${NumInput} value=${s.week} label="Week" onChange=${(v) => v && update({ ...s, week: v }, 300)} /></label>
-        <span>· ${done} sets</span>
+        <span>· ${done} set${done === 1 ? '' : 's'}</span>
         ${s.lastSetAt && html`<span>· last set ${fmtClock((now - s.lastSetAt) / 1000)} ago</span>`}
       </div>
     </div>
@@ -135,6 +137,7 @@ function ExerciseCard({ s, se, idx, exercise, locationId, update }) {
   const [menu, setMenu] = useState(false);
   const [setupOpen, setSetupOpen] = useState(false);
   const [showNotes, setShowNotes] = useState(!!se.notes);
+  const [editing, setEditing] = useState(null); // { setId, focus }
   if (!exercise) exercise = { name: '(deleted exercise)', repMin: 8, repMax: 12, setups: {} };
   const labels = labelSets(se.sets);
   const setup = exercise.setups?.[locationId] || exercise.setups?.any;
@@ -149,12 +152,12 @@ function ExerciseCard({ s, se, idx, exercise, locationId, update }) {
     unlockAudio();
     if (set.done) return update(unlogSet(s, se.id, set.id));
     const next = logSet(s, se.id, set.id, { settings: state.settings, bodyweight: !!exercise.bodyweight });
-    if (next === s) {
-      document.querySelector(`[data-reps="${set.id}"] input`)?.focus();
-      return;
-    }
+    if (next === s) return setEditing({ setId: set.id, focus: 'reps' }); // no reps yet: pick them
     update(next);
   };
+  const cell = (set, field, text, placeholder) => html`<button class=${'cell' + (text === '' ? ' empty' : '')}
+    aria-label=${field} onClick=${() => setEditing({ setId: set.id, focus: field })}>${text === '' ? placeholder : text}</button>`;
+  const editSet = editing && se.sets.find((x) => x.id === editing.setId);
 
   const myoBlocks = [...new Set(se.sets.filter((x) => x.type === SET.MYO_ACT).map((x) => x.block || 0))];
   const lastOfBlock = Object.fromEntries(myoBlocks.map((b) => [blockSets(se.sets, b).at(-1)?.id, b]));
@@ -164,30 +167,27 @@ function ExerciseCard({ s, se, idx, exercise, locationId, update }) {
       <h3><a href=${'#/exercises/' + se.exerciseId}>${exercise.name}</a></h3>
       <button class="icon-btn" aria-label="Exercise options" onClick=${() => setMenu(true)}>⋯</button>
     </div>
-    <button class="setup-line" onClick=${() => setSetupOpen(true)}>
-      ⚙ ${setup && (setup.equipment || setup.settings)
-        ? html`<span>${[setup.equipment, setup.settings].filter(Boolean).join(' · ')}</span>`
-        : html`<span class="muted">Add equipment setup</span>`}
-    </button>
     <div class="rx">${[
       `${se.plan?.sets || se.sets.filter((x) => x.type === SET.WORKING).length} × ${exercise.repMin}–${exercise.repMax}`,
       se.rir && `RIR ${se.rir}`,
       se.restMin ? `rest ${se.restMin} min` : se.rest && `rest ${fmtClock(se.rest)}`,
     ].filter(Boolean).join(' · ')}</div>
     <${Target} sug=${se.suggestion} exercise=${exercise} />
+    <button class="setup-line" onClick=${() => setSetupOpen(true)}>
+      ⚙ ${setup && (setup.equipment || setup.settings)
+        ? html`<span>${[setup.equipment, setup.settings].filter(Boolean).join(' · ')}</span>`
+        : html`<span class="muted">Add equipment setup</span>`}
+    </button>
     <div class="sets">
       <div class="set-row head"><span>Set</span><span>${exercise.bodyweight ? '+lb' : 'lb'}</span><span>Reps</span><span>RIR</span><span></span><span></span></div>
       ${se.sets.map((set, i) => html`
         <div key=${set.id} class=${`set-row t-${set.type}${set.done ? ' done' : ''}`}>
           <span class="set-label" title=${set.type}>${labels[i]}</span>
-          <${NumInput} decimal value=${set.weight} label="Weight" placeholder=${exercise.bodyweight ? 'BW' : 'lb'}
-            onChange=${(v) => patchSet(set.id, { weight: v, weightEdited: true })} />
-          <span data-reps=${set.id}><${NumInput} value=${set.reps} label="Reps"
-            placeholder=${set.target != null ? String(set.target) : `${exercise.repMin}-${exercise.repMax}`}
-            onChange=${(v) => patchSet(set.id, { reps: v })} /></span>
+          ${cell(set, 'weight', set.weight == null ? '' : exercise.bodyweight && !set.weight ? 'BW' : String(set.weight), exercise.bodyweight ? 'BW' : 'lb')}
+          ${cell(set, 'reps', set.reps == null ? '' : String(set.reps), set.target != null ? String(set.target) : `${exercise.repMin}-${exercise.repMax}`)}
           ${set.type === SET.MYO_MINI
             ? html`<span class="muted center">–</span>`
-            : html`<${NumInput} value=${set.rir} label="RIR" placeholder="–" onChange=${(v) => patchSet(set.id, { rir: v })} />`}
+            : cell(set, 'rir', set.rir == null ? '' : String(set.rir), '–')}
           <button class=${'check' + (set.done ? ' on' : '')} aria-label=${set.done ? 'Undo set' : 'Log set'} onClick=${() => toggle(set)}>✓</button>
           ${!set.done
             ? html`<button class="x" aria-label="Remove set" onClick=${() => update(removeSet(s, se.id, set.id))}>×</button>`
@@ -204,11 +204,51 @@ function ExerciseCard({ s, se, idx, exercise, locationId, update }) {
       <button class="chip" onClick=${() => update(addSet(s, se.id, SET.PARTIAL))}>+ Partial</button>
       ${!showNotes && html`<button class="chip" onClick=${() => setShowNotes(true)}>+ Note</button>`}
     </div>
-    ${showNotes && html`<textarea class="ex-notes" rows="2" placeholder="Notes for this exercise" value=${se.notes}
-      onInput=${(e) => patchEx({ notes: e.target.value }, 400)}></textarea>`}
+    ${showNotes && html`<div class="ex-notes"><${NoteField} value=${se.notes} presets=${(state.settings.notePresets || DEFAULT_NOTE_PRESETS).exercise}
+      onChange=${(v) => patchEx({ notes: v }, 400)} placeholder="Notes for this exercise" /></div>`}
+    ${editSet && html`<${SetSheet} set=${editSet} label=${labels[se.sets.indexOf(editSet)]} se=${se} exercise=${exercise}
+      focus=${editing.focus} onPatch=${(p) => patchSet(editSet.id, p)} onClose=${() => setEditing(null)}
+      onLog=${() => { if (!editSet.done) toggle(editSet); setEditing(null); }} />`}
     ${menu && html`<${ExerciseMenu} s=${s} se=${se} idx=${idx} exercise=${exercise} update=${update} onClose=${() => setMenu(false)} />`}
     ${setupOpen && html`<${SetupModal} exercise=${exercise} locationId=${locationId} onClose=${() => setSetupOpen(false)} />`}
   </section>`;
+}
+
+function PickGroup({ title, value, options, fmt, onPick, decimal, hint, target, onShift }) {
+  return html`<div class="pick-group">
+    <div class="pick-head"><span>${title}</span>${hint && html`<small>${hint}</small>`}
+      <${NumInput} decimal=${decimal} value=${value} label=${title + ' (type)'} placeholder="type" onChange=${onPick} /></div>
+    <div class="pick-chips">
+      ${onShift && html`<button class="pick shift" aria-label="Lighter" onClick=${() => onShift(-1)}>◀</button>`}
+      ${options.map((v) => html`<button class=${'pick' + (v === value ? ' on' : '') + (v === target ? ' tgt' : '')}
+        onClick=${() => onPick(v)}>${fmt ? fmt(v) : v}</button>`)}
+      ${onShift && html`<button class="pick shift" aria-label="Heavier" onClick=${() => onShift(1)}>▶</button>`}
+    </div>
+  </div>`;
+}
+
+/** Tap-to-pick weight / reps / RIR for one set, with a box to type in as a fallback. */
+function SetSheet({ set, label, se, exercise, focus, onPatch, onLog, onClose }) {
+  const bw = !!exercise.bodyweight;
+  const lastLoad = se.suggestion?.last?.load;
+  const [shift, setShift] = useState(0);
+  const weights = weightOptions({
+    current: set.weight, suggested: se.suggestion?.weight, last: lastLoad, increment: exercise.increment, bodyweight: bw, shift,
+  });
+  const reps = repOptions({ repMin: exercise.repMin, repMax: exercise.repMax, type: set.type });
+  const target = set.target;
+  return html`<${Modal} title=${`${exercise.name} · ${label}`} onClose=${onClose}>
+    <${PickGroup} name="weight" title=${bw ? 'Added weight (lb)' : 'Weight (lb)'} value=${set.weight} options=${weights} decimal
+      fmt=${(v) => (bw ? (v ? '+' + v : 'BW') : v)} onPick=${(v) => { setShift(0); onPick('weight', v); }} onShift=${(d) => setShift(shift + d)} />
+    <${PickGroup} name="reps" title="Reps" value=${set.reps} options=${reps} target=${target}
+      hint=${target != null ? `target ${target}` : `${exercise.repMin}–${exercise.repMax}`} onPick=${(v) => onPick('reps', v)} />
+    ${set.type !== SET.MYO_MINI && html`<${PickGroup} name="rir" title="RIR" value=${set.rir} options=${RIR_OPTIONS}
+      hint=${se.rir ? `target ${se.rir}` : ''} onPick=${(v) => onPick('rir', v)} />`}
+    <div class="log-bar"><button class="btn primary block" onClick=${onLog}>${set.done ? 'Done' : 'Log set ✓'}</button></div>
+  <//>`;
+  function onPick(field, v) {
+    onPatch(field === 'weight' ? { weight: v, weightEdited: true } : { [field]: v });
+  }
 }
 
 function MyoGuide({ se, block, onEnd }) {

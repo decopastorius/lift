@@ -4,6 +4,7 @@ import { NumInput, Field, Toggle, Modal, confirmAction, saveBackupFile } from '.
 import { uid, fmtDate, fmtNiceDate } from '../util.js';
 import { planImport } from '../importer.js';
 import { formatLog } from '../program.js';
+import { DEFAULT_NOTE_PRESETS } from '../pickers.js';
 import { testConnection, syncNow, pendingSessions, markBackupNeeded, restoreFromDrive } from '../sync.js';
 import { persistStorage, isStandalone } from '../device.js';
 
@@ -13,6 +14,7 @@ export function MoreView() {
     ${!isStandalone() && html`<div class="banner info"><span>On iPhone: tap <b>Share</b> → <b>Add to Home Screen</b> to install. It then works offline and your data is kept safe.</span></div>`}
     <${Locations} />
     <${Timers} />
+    <${NotePresets} />
     <${SheetSettings} />
     <${CoachSheet} />
     <${Backup} />
@@ -207,4 +209,17 @@ function ImportSheet({ onClose }) {
       <button class="btn primary" disabled=${!plan || (!plan.sessions.length && !plan.templates.length)} onClick=${apply}>Import</button>
     </div>
   <//>`;
+}
+
+function NotePresets() {
+  const p = state.settings.notePresets || DEFAULT_NOTE_PRESETS;
+  const set = (k) => (e) => saveSettings({ notePresets: { ...p, [k]: e.target.value.split('\n').map((x) => x.trim()).filter(Boolean) } });
+  return html`<section>
+    <h2>Quick notes</h2>
+    <div class="card form">
+      <p class="muted small">Tap-to-add notes for your coach, one per line.</p>
+      <${Field} label="Exercise notes"><textarea rows="5" value=${p.exercise.join('\n')} onChange=${set('exercise')}></textarea><//>
+      <${Field} label="Session notes"><textarea rows="4" value=${p.session.join('\n')} onChange=${set('session')}></textarea><//>
+    </div>
+  </section>`;
 }

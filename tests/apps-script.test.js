@@ -80,6 +80,13 @@ test('writes into the existing coach sheet, next to Week 1', () => {
   assert.equal(coach.v[4][8], "45'");
   assert.equal(ss.getSheetByName('Program'), null, 'no new tab when the block exists');
 
+  // notes for the coach land in the cell note
+  post(payload('s2', { ...program(2, '170 x 9, 8 | RIR 1, 0'), note: 'Poor sleep',
+    rows: program(2, '170 x 9, 8 | RIR 1, 0').rows.map((r) => (r.log ? { ...r, note: 'Felt heavy' } : r)) }));
+  assert.equal(coach.notes['4,9'], 'Felt heavy\nlift-log:s2');
+  assert.equal(coach.notes['5,9'], "Poor sleep\nlift-log:s2");
+  assert.equal(coach.v[3][8], '170 x 9, 8 | RIR 1, 0');
+
   // re-sending the same workout replaces, doesn't duplicate
   post(payload('s2', program(2, '170 x 10, 9 | RIR 1, 0')));
   assert.equal(coach.v[3][8], '170 x 10, 9 | RIR 1, 0');

@@ -3,6 +3,7 @@ import { SET, isLogged, suggest } from './progression.js';
 import { myoNext, blockSets } from './myo.js';
 import { uid } from './util.js';
 import { restSeconds, defaultLayout, nextWeek } from './program.js';
+import { DEFAULT_NOTE_PRESETS } from './pickers.js';
 
 export const DEFAULT_SETTINGS = {
   id: 'settings',
@@ -15,6 +16,7 @@ export const DEFAULT_SETTINGS = {
   keepAwake: true,
   sheetUrl: '',
   sheetSecret: '',
+  notePresets: DEFAULT_NOTE_PRESETS,
   program: defaultLayout(), // the coach's sheet layout (blocks and rows, in sheet order)
 };
 
