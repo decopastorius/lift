@@ -195,3 +195,12 @@ test('warm-up load is not carried into work sets; typed loads are kept', () => {
   assert.equal(s.exercises[0].sets[2].weight, 45);
   assert.equal(s.exercises[0].sets[3].weight, 40);
 });
+
+test('starter library is valid', async () => {
+  const { seedExercises } = await import('../src/seed.js');
+  const list = seedExercises();
+  assert.equal(list.length, 20);
+  assert.equal(new Set(list.map((e) => e.name)).size, list.length);
+  for (const e of list) assert.ok(e.repMin < e.repMax && e.increment > 0, e.name);
+  assert.ok(list.find((e) => e.name === 'Pull-Ups / Chin-Ups').bodyweight);
+});

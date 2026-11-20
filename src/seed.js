@@ -5,49 +5,35 @@ export function seedLocations() {
   return ['Home', 'Cottage', 'Travel'].map((name, i) => ({ id: uid(), name, order: i, equipment: '' }));
 }
 
-// [name, category, repMin, repMax, increment(lb), bodyweight]
+// Starting library: the exercises currently in the program.
+// [name, category, repMin, repMax, increment(lb), bodyweight, notes]
+// Rep ranges and increments are starting points; edit them in the app.
 const LIST = [
-  ['Barbell Bench Press', 'Chest', 6, 10, 5],
-  ['Dumbbell Bench Press', 'Chest', 8, 12, 5],
-  ['Incline Dumbbell Press', 'Chest', 8, 12, 5],
-  ['Push-up', 'Chest', 10, 20, 5, true],
-  ['Dip', 'Chest', 6, 12, 5, true],
-  ['Cable Fly', 'Chest', 10, 15, 5],
-  ['Overhead Press', 'Shoulders', 6, 10, 5],
-  ['Dumbbell Shoulder Press', 'Shoulders', 8, 12, 5],
-  ['Lateral Raise', 'Shoulders', 12, 20, 2.5],
-  ['Rear Delt Fly', 'Shoulders', 12, 20, 2.5],
-  ['Pull-up', 'Back', 6, 10, 5, true],
-  ['Chin-up', 'Back', 6, 10, 5, true],
-  ['Lat Pulldown', 'Back', 8, 12, 5],
-  ['One-arm Dumbbell Row', 'Back', 8, 12, 5],
-  ['Chest-supported Row', 'Back', 8, 12, 5],
-  ['Seated Cable Row', 'Back', 8, 12, 5],
-  ['Inverted Row', 'Back', 8, 15, 5, true],
-  ['Back Squat', 'Legs', 5, 8, 5],
-  ['Goblet Squat', 'Legs', 8, 15, 5],
-  ['Bulgarian Split Squat', 'Legs', 8, 12, 5],
-  ['Leg Press', 'Legs', 10, 15, 10],
-  ['Romanian Deadlift', 'Legs', 6, 10, 5],
-  ['Deadlift', 'Legs', 3, 6, 10],
-  ['Hip Thrust', 'Legs', 8, 12, 10],
-  ['Leg Curl', 'Legs', 10, 15, 5],
+  ['Chest Supported DB Row', 'Back', 8, 12, 5],
+  ['Seated Row (cable)', 'Back', 8, 12, 5],
+  ['Cable Pull-Down (neutral grip)', 'Back', 8, 12, 5],
+  ['Pull-Ups / Chin-Ups', 'Back', 6, 10, 5, true, 'Weight = added load (belt/vest). Note grip in set notes.'],
+  ['DB Bench Press (horizontal)', 'Chest', 8, 12, 5],
+  ['Barbell Bench Press (horizontal)', 'Chest', 6, 10, 5],
+  ['Incline DB Press (15-30°)', 'Chest', 8, 12, 5],
+  ['Incline Barbell Press (15-30°)', 'Chest', 6, 10, 5],
+  ['Lateral Raise (DB)', 'Shoulders', 12, 20, 5],
+  ['Lateral Raise (cable)', 'Shoulders', 12, 20, 5],
+  ['Skullcrusher (DB)', 'Arms', 10, 15, 5],
+  ['Cable Pressdown (rope)', 'Arms', 10, 15, 5],
+  ['Standing Curl (DB)', 'Arms', 8, 12, 5, false, 'Bilateral or unilateral. Weight = per dumbbell.'],
+  ['Split Squat (Smith Machine)', 'Legs', 8, 12, 5],
+  ['Split Squat (DB)', 'Legs', 8, 12, 5, false, 'Weight = per dumbbell.'],
+  ['RDL (DB)', 'Legs', 8, 12, 5, false, 'Romanian deadlift. Bilateral or unilateral. Weight = per dumbbell.'],
+  ['Deadlift (conventional)', 'Legs', 3, 6, 10],
+  ['Seated Leg Curl (machine)', 'Legs', 10, 15, 5],
   ['Leg Extension', 'Legs', 10, 15, 5],
-  ['Standing Calf Raise', 'Legs', 10, 15, 5],
-  ['Dumbbell Curl', 'Arms', 8, 12, 2.5],
-  ['Incline Dumbbell Curl', 'Arms', 8, 12, 2.5],
-  ['Hammer Curl', 'Arms', 8, 12, 2.5],
-  ['Cable Triceps Pushdown', 'Arms', 10, 15, 5],
-  ['Overhead Triceps Extension', 'Arms', 10, 15, 2.5],
-  ['Skull Crusher', 'Arms', 8, 12, 5],
-  ['Hanging Leg Raise', 'Core', 8, 15, 5, true],
-  ['Cable Crunch', 'Core', 10, 15, 5],
-  ['Plank (seconds)', 'Core', 30, 60, 5, true],
+  ['Ab Exercise (of choice)', 'Core', 10, 15, 5, true, 'Write which exercise you did in the exercise notes.'],
 ];
 
 export function seedExercises() {
-  return LIST.map(([name, category, repMin, repMax, increment, bodyweight]) => newExercise({
-    name, category, repMin, repMax, increment, bodyweight: !!bodyweight,
+  return LIST.map(([name, category, repMin, repMax, increment, bodyweight, notes]) => newExercise({
+    name, category, repMin, repMax, increment, bodyweight: !!bodyweight, notes: notes || '',
   }));
 }
 
