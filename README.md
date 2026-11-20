@@ -33,7 +33,8 @@ whenever you're online, but logging never depends on the sheet.
   - paste the program straight from Google Sheets;
   - it updates exercises, rep ranges and templates;
   - weeks already logged become history, so progression starts from real numbers;
-  - set "Week 1 started on" so new workouts land in the right week column.
+  - **or paste just one week's column** (values only, with the "Week N" lines); the values are lined up with the program's rows using the h / c tags, and the preview shows exactly where each one went.
+- **Weeks**: a week is one round of the program. Each workout gets the week after the last one logged with the same name (e.g. Upper 1 after week 7 → week 8). You can change it at the top of the workout or in its history page.
 - **Every finished workout is automatically**:
   - **exported to the Google Sheet**, and
   - **backed up to Google Drive**: a full JSON backup in a `Lift Log backups` folder, one file per day, last 30 days kept.

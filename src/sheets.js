@@ -1,7 +1,7 @@
 // Build the rows sent to Google Sheets. Pure — the network call lives in sync.js.
 import { SET, SET_NAME, labelSets, isLogged, round } from './progression.js';
 import { suggestionFor } from './session-logic.js';
-import { formatLog, programRows, weekNumber } from './program.js';
+import { formatLog, programRows, weekOf } from './program.js';
 import { fmtDate, fmtTime, fmtLoad } from './util.js';
 
 export const SET_HEADERS = [
@@ -17,11 +17,11 @@ export const SUMMARY_HEADERS = [
 
 /**
  * @param session finished session
- * @param ctx {exercisesById, locationsById, sessions, templates, programStart}
+ * @param ctx {exercisesById, locationsById, sessions, templates, layout}
  */
-export function buildPayload(session, { exercisesById, locationsById, sessions, templates = [], programStart = '' }) {
+export function buildPayload(session, { exercisesById, locationsById, sessions, templates = [], layout = [] }) {
   const date = fmtDate(session.startedAt);
-  const week = weekNumber(session.startedAt, programStart);
+  const week = weekOf(session, sessions);
   const logs = {};
   const loc = locationsById[session.locationId]?.name || '';
   const duration = session.endedAt ? Math.round((session.endedAt - session.startedAt) / 6000) / 10 : '';
@@ -63,7 +63,7 @@ export function buildPayload(session, { exercisesById, locationsById, sessions, 
 
   // The coach's layout: a block per workout, a row per exercise, a column per week.
   const locations = Object.values(locationsById);
-  const rows = programRows({ workout: session.name, templates, locations, exercisesById, session })
+  const rows = programRows({ workout: session.name, templates, locations, exercisesById, session, layout })
     .map((r) => ({ ...r, log: logs[r.exerciseId] || '' }));
   const minutes = session.endedAt ? Math.round((session.endedAt - session.startedAt) / 60000) : 0;
   const program = {

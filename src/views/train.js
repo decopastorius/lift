@@ -1,6 +1,7 @@
 import { html, useState } from '../vendor/preact-htm.js';
 import { state, save, byId, activeSession } from '../store.js';
 import { startSession } from '../session-logic.js';
+import { nextWeek } from '../program.js';
 import { go, Empty, confirmAction } from '../components.js';
 import { fmtClock, fmtNiceDate } from '../util.js';
 import { pendingSessions, syncNow } from '../sync.js';
@@ -61,7 +62,7 @@ export function TrainView() {
         return html`<div class="card tpl-row">
           <a class="tpl-info" href=${'#/templates/' + t.id}>
             <strong>${t.name}</strong>
-            <small>${locName[t.locationId]?.name || 'Any'} · ${t.items.length} exercises${last ? ' · last ' + fmtNiceDate(last) : ''}</small>
+            <small>${locName[t.locationId]?.name || 'Any'} · ${t.items.length} exercises · week ${nextWeek(t.name, state.sessions)} next${last ? ' · last ' + fmtNiceDate(last) : ''}</small>
           </a>
           <button class="btn primary" onClick=${() => begin(t)}>Start</button>
         </div>`;

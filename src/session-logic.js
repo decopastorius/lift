@@ -2,7 +2,7 @@
 import { SET, isLogged, suggest } from './progression.js';
 import { myoNext, blockSets } from './myo.js';
 import { uid } from './util.js';
-import { restSeconds } from './program.js';
+import { restSeconds, defaultLayout, nextWeek } from './program.js';
 
 export const DEFAULT_SETTINGS = {
   id: 'settings',
@@ -15,7 +15,7 @@ export const DEFAULT_SETTINGS = {
   keepAwake: true,
   sheetUrl: '',
   sheetSecret: '',
-  programStart: '',     // YYYY-MM-DD of week 1 in the coach's sheet
+  program: defaultLayout(), // the coach's sheet layout (blocks and rows, in sheet order)
 };
 
 export function newSet(type, extra = {}) {
@@ -75,6 +75,7 @@ export function startSession({ template, locationId, exercisesById, sessions, se
     status: 'active',
     templateId: template?.id || null,
     name: template?.name || 'Workout',
+    week: nextWeek(template?.name || 'Workout', sessions),
     locationId: template?.locationId || locationId || null,
     startedAt: now,
     endedAt: null,

@@ -1,9 +1,9 @@
 import { html, useState, useEffect } from '../vendor/preact-htm.js';
 import { state, save, remove, saveSettings, importBackup, byId } from '../store.js';
 import { NumInput, Field, Toggle, Modal, confirmAction, saveBackupFile } from '../components.js';
-import { uid, mondayOf, fmtNiceDate } from '../util.js';
+import { uid, fmtDate, fmtNiceDate } from '../util.js';
 import { planImport } from '../importer.js';
-import { weekNumber } from '../program.js';
+import { formatLog } from '../program.js';
 import { testConnection, syncNow, pendingSessions, markBackupNeeded, restoreFromDrive } from '../sync.js';
 import { persistStorage, isStandalone } from '../device.js';
 
@@ -148,19 +148,16 @@ function Backup() {
 
 function CoachSheet() {
   const [importing, setImporting] = useState(false);
-  const st = state.settings;
-  const start = st.programStart;
+  const layout = state.settings.program || [];
   return html`<section>
     <h2>Coach's program sheet</h2>
     <div class="card form">
-      <p class="muted small">Each workout is written into the coach's layout: its block (e.g. “Upper 1”), the exercise's row,
-        the “Week N” column, as <code>165 x 12, 12 | RIR 1, 0</code>, with the session time under the block.</p>
-      <${Field} label="Week 1 started on" hint=${start ? `Today is in week ${weekNumber(Date.now(), start)}.` : 'Not set: it will be the week of your first workout.'}>
-        <input type="date" value=${start || ''} onInput=${(e) => saveSettings({ programStart: e.target.value })} />
-      <//>
+      <p class="muted small">Each workout is written into the coach's layout: its block (${layout.map((b) => b.name).join(', ') || 'e.g. Upper 1'}),
+        the exercise's row and the “Week N” column, as <code>165 x 12, 12 | RIR 1, 0</code>, with the session time under the block.
+        A week is one round of the program; each workout gets the week after the last one logged (you can change it on the workout).</p>
       <button class="btn block" onClick=${() => setImporting(true)}>Import from the coach's sheet</button>
-      <p class="muted small">Paste the program from the sheet to load its exercises, rep ranges, templates (from the h / c tags)
-        and the weeks already logged, so progression starts from your real numbers.</p>
+      <p class="muted small">Paste either the whole program (header rows + week columns) to update exercises, rep ranges, templates
+        and history, or just one week's column (values only) to add that week as history.</p>
     </div>
     ${importing && html`<${ImportSheet} onClose=${() => setImporting(false)} />`}
   </section>`;
@@ -168,38 +165,46 @@ function CoachSheet() {
 
 function ImportSheet({ onClose }) {
   const [text, setText] = useState('');
-  const [start, setStart] = useState(state.settings.programStart || mondayOf(Date.now()));
+  const [lastDate, setLastDate] = useState(fmtDate(Date.now() - 86400000));
+  const [week, setWeek] = useState(null);
   const [done, setDone] = useState('');
-  const plan = text.trim() ? planImport(text, state, start) : null;
+  const layout = state.settings.program || [];
+  const plan = text.trim() ? planImport(text, state, { layout, lastDate, week }) : null;
   const locName = byId(state.locations);
+  const exName = byId(state.exercises);
+  const nameOf = (id) => exName[id]?.name || plan?.exercises.find((e) => e.id === id)?.name || '?';
   const apply = () => {
-    saveSettings({ programStart: start });
+    if (plan.layout) saveSettings({ program: plan.layout });
     for (const e of plan.exercises) save('exercises', e);
     for (const t of plan.templates) save('templates', t);
     for (const s of plan.sessions) save('sessions', s);
     if (plan.sessions.length) markBackupNeeded();
-    setDone(`Imported ${plan.templates.length} templates and ${plan.sessions.length} past workouts.`);
+    setDone(`Imported ${plan.templates.length ? plan.templates.length + ' templates and ' : ''}${plan.sessions.length} past workouts.`);
     setText('');
   };
   return html`<${Modal} title="Import from the coach's sheet" onClose=${onClose}>
-    <p class="muted small">In Google Sheets, select the rows from the first workout header (e.g. “Upper 1 | Sets | Reps…”)
-      down to the last exercise, including the week columns. Copy, then paste here.</p>
-    <${Field} label="Week 1 started on"><input type="date" value=${start} onInput=${(e) => setStart(e.target.value)} /><//>
+    <p class="muted small">Copy from Google Sheets and paste below: the whole program, or one week's column
+      (from the first exercise down; include the “Week N” lines).</p>
     <textarea rows="8" value=${text} placeholder="Paste here" onInput=${(e) => { setText(e.target.value); setDone(''); }}></textarea>
+    <div class="row2">
+      <${Field} label="Last workout in the paste was on"><input type="date" value=${lastDate} onInput=${(e) => setLastDate(e.target.value)} /><//>
+      ${plan?.missingWeek && html`<${Field} label="Which week is this?"><${NumInput} value=${week} label="Week" onChange=${setWeek} /><//>`}
+    </div>
     ${done && html`<p class="small">✓ ${done}</p>`}
     ${plan && html`<div class="import-preview">
-      ${plan.workouts.length === 0 && html`<p class="error">No workout blocks found. Include the header row with “Sets”.</p>`}
-      <ul>
-        ${plan.workouts.map((w) => html`<li><strong>${w.name}</strong>: ${w.rows.length} exercises</li>`)}
-        <li>${plan.templates.length} templates: ${plan.templates.map((t) => `${t.name} (${locName[t.locationId]?.name})`).join(', ')}</li>
-        ${plan.exercises.length > 0 && html`<li>${plan.exercises.length} exercises added or rep ranges updated: ${plan.exercises.map((e) => e.name).join(', ')}</li>`}
-        <li>${plan.sessions.length} past workouts: ${plan.sessions.map((s) => `${s.name} wk ${weekNumber(s.startedAt, start)} (${locName[s.locationId]?.name}, ${fmtNiceDate(s.startedAt)})`).join(', ') || 'none new'}</li>
-      </ul>
+      ${plan.mode === 'program' && html`<p><strong>Whole program:</strong> ${plan.workouts.map((w) => `${w.name} (${w.rows.length})`).join(', ')}.
+        ${plan.templates.length} templates${plan.exercises.length ? `, ${plan.exercises.length} exercises added/updated` : ''}.</p>`}
+      ${plan.mode === 'column' && html`<p><strong>One week's values</strong>, lined up with the program:</p>`}
+      ${plan.sessions.map((s) => html`<div class="preview-session">
+        <strong>${s.name}</strong> · week ${s.week} · ${locName[s.locationId]?.name || ''} · ${fmtNiceDate(s.startedAt)}
+        <ul>${s.exercises.map((e) => html`<li>${nameOf(e.exerciseId)}: <code>${formatLog(e.sets, !!(exName[e.exerciseId]?.bodyweight))}</code></li>`)}</ul>
+      </div>`)}
+      ${plan.sessions.length === 0 && html`<p class="muted">No new workouts to add${plan.missingWeek && !week ? ' (enter the week number)' : ''}.</p>`}
       ${plan.warnings.map((w) => html`<p class="error small">${w}</p>`)}
     </div>`}
     <div class="actions">
       <button class="btn" onClick=${onClose}>Close</button>
-      <button class="btn primary" disabled=${!plan || !plan.workouts.length || !start} onClick=${apply}>Import</button>
+      <button class="btn primary" disabled=${!plan || (!plan.sessions.length && !plan.templates.length)} onClick=${apply}>Import</button>
     </div>
   <//>`;
 }

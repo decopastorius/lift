@@ -1,8 +1,7 @@
 // Push finished sessions to Google Sheets via an Apps Script web app.
 // Tracking never depends on this: sessions stay local with syncState 'pending'
 // until a push succeeds, and we retry whenever the app is opened or comes online.
-import { state, save, emit, byId, exportBackup, saveBackupState, saveSettings } from './store.js';
-import { mondayOf } from './util.js';
+import { state, save, emit, byId, exportBackup, saveBackupState } from './store.js';
 import { buildPayload } from './sheets.js';
 
 export function pendingSessions() {
@@ -33,15 +32,9 @@ export async function syncNow() {
   state.sync = { ...state.sync, busy: true, lastError: '' };
   emit();
   let ok = true;
-  if (!state.settings.programStart && state.sessions.some((x) => x.status === 'done')) {
-    // Week 1 = the week of the first logged workout, unless set in More → Coach's sheet.
-    const first = Math.min(...state.sessions.filter((x) => x.status === 'done').map((x) => x.startedAt));
-    saveSettings({ programStart: mondayOf(first) });
-    state.settings.programStart = mondayOf(first);
-  }
   const ctx = {
     exercisesById: byId(state.exercises), locationsById: byId(state.locations), sessions: state.sessions,
-    templates: state.templates, programStart: state.settings.programStart,
+    templates: state.templates, layout: state.settings.program || [],
   };
   for (const s of todo) {
     try {

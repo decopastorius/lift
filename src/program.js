@@ -10,6 +10,7 @@ import { blockSets, myoNext } from './myo.js';
 export const PROGRAM = [
   {
     name: 'Upper 1',
+    example: true, // the sheet has an "Example for Logging Data" row under this header
     rows: [
       ['c', 'Chest Supported DB Row', 2, '0-1', '3-4'],
       ['h', 'Seated Row (cable)', 2, '0-1', '3-4'],
@@ -59,21 +60,35 @@ export function restSeconds(restMin) {
   return m ? Math.round(parseFloat(m[1].replace(',', '.')) * 60) : null;
 }
 
-/** Program week (1-based) of a timestamp, counting 7-day weeks from the start date (YYYY-MM-DD). */
-export function weekNumber(ts, programStart) {
-  if (!programStart) return 1;
-  const [y, mo, d] = programStart.split('-').map(Number);
-  const start = new Date(y, mo - 1, d);
-  const t = new Date(ts);
-  const day = new Date(t.getFullYear(), t.getMonth(), t.getDate());
-  const days = Math.round((day - start) / 86400000);
-  return Math.max(1, Math.floor(days / 7) + 1);
+/** The sheet layout the app starts with: blocks of rows, in the sheet's order. */
+export function defaultLayout() {
+  return PROGRAM.map((w) => ({
+    name: w.name,
+    example: !!w.example,
+    rows: w.rows.map(([tag, name, sets, rir, rest]) => ({ tag, name, sets, reps: '', rir, rest })),
+  }));
 }
 
-/** Start date of a program week, as a timestamp at the given hour. */
-export function weekStartTs(programStart, week, dayOffset = 0, hour = 12) {
-  const [y, mo, d] = programStart.split('-').map(Number);
-  return new Date(y, mo - 1, d + (week - 1) * 7 + dayOffset, hour).getTime();
+/**
+ * The coach's "Week N" of a workout. A week is one round of the program (Upper 1, Lower 1,
+ * Upper 2...), so it's stored on each workout; older ones without it count occurrences.
+ */
+export function weekOf(session, sessions = []) {
+  if (Number.isFinite(session.week)) return session.week;
+  return 1 + sessions.filter((s) => s.status === 'done' && s.id !== session.id
+    && norm(s.name) === norm(session.name) && s.startedAt < session.startedAt).length;
+}
+
+/** Week for the next workout with this name: one after the latest one logged. */
+export function nextWeek(name, sessions) {
+  const done = sessions.filter((s) => s.status === 'done' && norm(s.name) === norm(name));
+  return done.length ? Math.max(...done.map((s) => weekOf(s, sessions))) + 1 : 1;
+}
+
+/** Noon, `daysBefore` days before a YYYY-MM-DD date. */
+export function dayTs(date, daysBefore = 0) {
+  const [y, m, d] = date.split('-').map(Number);
+  return new Date(y, m - 1, d - daysBefore, 12).getTime();
 }
 
 const fmtNum = (n) => String(Math.round(n * 100) / 100);
@@ -200,7 +215,7 @@ export function parseProgramPaste(text) {
       }
       continue;
     }
-    if (/^example/i.test(name)) continue;
+    if (/^example/i.test(name)) { cur.example = true; continue; }
     const reps = String(c[3] || '').match(/(\d+)\s*[-–]\s*(\d+)/);
     const weeks = {};
     for (const [i, w] of weekCols) if ((c[i] || '').trim()) weeks[w] = c[i].trim();
@@ -219,43 +234,117 @@ export function parseProgramPaste(text) {
   return workouts.filter((w) => w.rows.length);
 }
 
+const LOG_KIND = (v) => {
+  if (!v) return 'empty';
+  if (/^\d+\s*(['’′]|min\b)/i.test(v)) return 'duration';
+  if (/^load\b/i.test(v)) return 'example';
+  return parseLog(v).length ? 'log' : 'other';
+};
+
 /**
- * Rows of a workout's block in the coach's sheet: every exercise in the templates with that
- * name, interleaved by position across locations, tagged with the location letters.
+ * Parse a single week column copied from the sheet (values only, one per line, blank lines for
+ * empty cells, "Week N" where a block header was). Values are lined up with the layout's rows;
+ * where several alignments are possible, the one whose filled rows share a location tag wins.
  */
-export function programRows({ workout, templates, locations, exercisesById, session }) {
+export function parseColumnPaste(text, layout) {
+  const lines = String(text).split(/\r?\n/).map((l) => l.split('\t')[0].trim());
+  const segs = [];
+  let cur = { week: null, lines: [] };
+  for (const l of lines) {
+    const m = l.match(/^week\s*(\d+)$/i);
+    if (m) { segs.push(cur); cur = { week: Number(m[1]), lines: [] }; } else cur.lines.push(l);
+  }
+  segs.push(cur);
+  if (!segs[0].lines.some(Boolean)) segs.shift();
+  const headerWeek = segs.find((x) => x.week != null)?.week ?? null;
+  const warnings = [];
+  const blocks = [];
+  segs.forEach((seg, i) => {
+    const w = layout[i];
+    if (!w) {
+      if (seg.lines.some(Boolean)) warnings.push(`The paste has more blocks than the program (${layout.length}); the rest was ignored.`);
+      return;
+    }
+    const ls = [...seg.lines];
+    while (ls.length && !ls.at(-1)) ls.pop();
+    const slots = [...(w.example ? [{ kind: 'example' }] : []), ...w.rows.map((row) => ({ kind: 'log', row })), { kind: 'duration' }];
+    while (ls.length > slots.length && !ls[0]) ls.shift();
+    const kinds = ls.map(LOG_KIND);
+    if (kinds.includes('other')) {
+      warnings.push(`${w.name}: couldn’t read “${ls[kinds.indexOf('other')]}”.`);
+      return;
+    }
+    const fits = [];
+    for (let o = 0; o + ls.length <= slots.length; o++) {
+      if (!kinds.every((k, j) => k === 'empty' || k === slots[o + j].kind)) continue;
+      const tags = kinds.map((k, j) => (k === 'log' ? slots[o + j].row.tag || '' : null)).filter((t) => t != null);
+      const consistent = !tags.length || [...'abcdefghijklmnopqrstuvwxyz'].some((c) => tags.every((t) => !t || t.includes(c)));
+      fits.push({ o, consistent });
+    }
+    const good = fits.filter((f) => f.consistent);
+    const pool = good.length ? good : fits;
+    if (!pool.length || !kinds.includes('log')) {
+      if (kinds.includes('log')) warnings.push(`${w.name}: couldn’t line the values up with the exercises.`);
+      return;
+    }
+    if (pool.length > 1) warnings.push(`${w.name}: the values could line up more than one way. Check the preview.`);
+    const { o } = seg.week != null ? pool[0] : pool.at(-1); // under a header: from the top; else from the bottom
+    const values = {};
+    let duration = null;
+    ls.forEach((v, j) => {
+      const slot = slots[o + j];
+      if (v && slot.kind === 'log') values[slot.row.name] = v;
+      if (v && slot.kind === 'duration') duration = parseInt(v, 10);
+    });
+    blocks.push({ workout: w.name, week: seg.week ?? headerWeek, values, duration });
+  });
+  return { blocks, warnings };
+}
+
+/**
+ * Rows of a workout's block in the coach's sheet: the layout's rows first (sheet order), then any
+ * other exercise in the templates with that name or in the session, tagged with location letters.
+ */
+export function programRows({ workout, templates, locations, exercisesById, session, layout = [] }) {
   const locOrder = [...locations].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  const exByName = Object.fromEntries(Object.values(exercisesById).map((e) => [norm(e.name), e]));
+  const rows = [];
+  const byKey = {};
+  const add = (name, letters, item) => {
+    if (!name) return;
+    const k = norm(name);
+    const ex = exByName[k];
+    if (!byKey[k]) {
+      byKey[k] = {
+        exerciseId: ex?.id || null, name: ex?.name || name, letters: new Set(), sets: item.sets ?? '',
+        reps: ex ? `${ex.repMin}-${ex.repMax}` : item.reps || '', rir: item.rir || '', progression: 'Double',
+        rest: typeof item.restMin === 'string' ? item.restMin : '',
+      };
+      rows.push(byKey[k]);
+    }
+    for (const l of letters) byKey[k].letters.add(l);
+  };
+  const block = layout.find((b) => norm(b.name) === norm(workout));
+  for (const r of block?.rows || []) add(r.name, r.tag || '', { sets: r.sets, rir: r.rir, restMin: r.rest || '', reps: r.reps });
   const tpls = templates
     .filter((t) => norm(t.name) === norm(workout))
     .sort((a, b) => locOrder.findIndex((l) => l.id === a.locationId) - locOrder.findIndex((l) => l.id === b.locationId));
-  const rows = [];
-  const byEx = {};
-  const add = (exerciseId, letter, item) => {
-    const ex = exercisesById[exerciseId];
-    if (!ex) return;
-    if (!byEx[exerciseId]) {
-      byEx[exerciseId] = {
-        exerciseId, name: ex.name, letters: new Set(), sets: item.sets ?? '',
-        reps: `${ex.repMin}-${ex.repMax}`, rir: item.rir || '', progression: 'Double', rest: item.restMin || '',
-      };
-      rows.push(byEx[exerciseId]);
-    }
-    if (letter) byEx[exerciseId].letters.add(letter);
-  };
   const max = Math.max(0, ...tpls.map((t) => t.items.length));
   for (let i = 0; i < max; i++) {
     for (const t of tpls) {
       const it = t.items[i];
-      if (!it) continue;
       const loc = locations.find((l) => l.id === t.locationId);
-      add(it.exerciseId, loc ? locLetter(loc) : '', it);
+      const name = it && exercisesById[it.exerciseId]?.name;
+      if (name) add(name, block && byKey[norm(name)] ? '' : loc ? locLetter(loc) : '', it);
     }
   }
   if (session) {
     const loc = locations.find((l) => l.id === session.locationId);
     for (const e of session.exercises) {
-      add(e.exerciseId, loc ? locLetter(loc) : '', {
-        sets: e.plan?.sets ?? e.sets.filter((s) => s.type === SET.WORKING).length, rir: e.rir, restMin: e.restMin,
+      const name = exercisesById[e.exerciseId]?.name;
+      const known = name && byKey[norm(name)];
+      add(name, known ? '' : loc ? locLetter(loc) : '', {
+        sets: e.plan?.sets ?? e.sets.filter((s) => s.type === SET.WORKING).length, rir: e.rir, restMin: e.restMin || '',
       });
     }
   }

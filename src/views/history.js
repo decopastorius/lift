@@ -2,7 +2,7 @@ import { html } from '../vendor/preact-htm.js';
 import { state, save, remove, byId } from '../store.js';
 import { labelSets, SET_NAME } from '../progression.js';
 import { itemsFromSession } from '../session-logic.js';
-import { formatLog, weekNumber } from '../program.js';
+import { formatLog, weekOf } from '../program.js';
 import { NumInput, Field, go, Empty, confirmAction, saveBackupFile } from '../components.js';
 import { fmtClock, fmtNiceDate, fmtTime, uid } from '../util.js';
 import { syncNow, markBackupNeeded } from '../sync.js';
@@ -39,7 +39,7 @@ export function HistoryView({ id }) {
   return html`<div class="page">
     <a class="back" href="#/">‹ Train</a>
     <h1>${s.name}</h1>
-    <p class="muted">Week ${weekNumber(s.startedAt, state.settings.programStart)} · ${fmtNiceDate(s.startedAt)} ${fmtTime(s.startedAt)} · ${loc?.name || ''} · ${fmtClock(((s.endedAt || s.startedAt) - s.startedAt) / 1000)}</p>
+    <p class="muted"><label class="wk">Week <${NumInput} value=${weekOf(s, state.sessions)} label="Week" onChange=${(v) => v && update({ ...s, week: v })} /></label> · ${fmtNiceDate(s.startedAt)} ${fmtTime(s.startedAt)} · ${loc?.name || ''} · ${fmtClock(((s.endedAt || s.startedAt) - s.startedAt) / 1000)}</p>
     <${AfterWorkout} s=${s} />
     <div class="row2">
       <button class="btn primary" onClick=${repeat}>Repeat workout</button>

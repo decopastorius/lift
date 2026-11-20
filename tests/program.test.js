@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { SET } from '../src/progression.js';
 import {
-  formatLog, parseLog, parseProgramPaste, restSeconds, weekNumber, programRows,
+  formatLog, parseLog, parseProgramPaste, parseColumnPaste, restSeconds, programRows, defaultLayout, nextWeek, weekOf,
 } from '../src/program.js';
 import { seedLocations, seedExercises, seedTemplates } from '../src/seed.js';
 import { planImport } from '../src/importer.js';
@@ -43,9 +43,11 @@ test('rest ranges and weeks', () => {
   assert.equal(restSeconds('1-3'), 60);
   assert.equal(restSeconds('2.5'), 150);
   assert.equal(restSeconds(''), null);
-  assert.equal(weekNumber(new Date(2026, 10, 16, 9).getTime(), '2026-11-16'), 1);
-  assert.equal(weekNumber(new Date(2026, 10, 22, 23).getTime(), '2026-11-16'), 1);
-  assert.equal(weekNumber(new Date(2026, 10, 23, 1).getTime(), '2026-11-16'), 2);
+  const done = (name, week, startedAt) => ({ id: name + week, status: 'done', name, week, startedAt });
+  const ss = [done('Upper 1', 7, 1), done('Upper 2', 7, 3), done('Upper 1', 6, 0)];
+  assert.equal(nextWeek('Upper 1', ss), 8);
+  assert.equal(nextWeek('Lower 1', ss), 1);
+  assert.equal(weekOf({ name: 'X', startedAt: 5, status: 'done', id: 'b' }, [{ id: 'a', name: 'X', status: 'done', startedAt: 1 }]), 2);
 });
 
 test('seeded templates follow the h / c / hc tags', () => {
@@ -94,7 +96,7 @@ test('parse a pasted sheet block', () => {
 test('import creates templates, exercises and history; progression uses it', () => {
   const locations = seedLocations();
   const exercises = seedExercises();
-  const plan = planImport(PASTE, { locations, exercises, templates: [], sessions: [] }, '2026-11-09');
+  const plan = planImport(PASTE, { locations, exercises, templates: [], sessions: [] }, { layout: defaultLayout(), lastDate: '2026-11-19' });
   assert.deepEqual(plan.warnings, []);
   assert.equal(plan.templates.length, 2);
   assert.equal(plan.exercises.length, 1, 'only "New Thing" is new');
@@ -104,14 +106,18 @@ test('import creates templates, exercises and history; progression uses it', () 
   assert.equal(s1.locationId, locations[0].id, 'week 1 was at Home (h rows)');
   assert.equal(s1.endedAt - s1.startedAt, 40 * 60000);
   assert.equal(s2.syncState, 'synced');
-  assert.equal(weekNumber(s2.startedAt, '2026-11-09'), 2);
+  assert.equal(s2.week, 2);
+  assert.equal(new Date(s2.startedAt).getDate(), 19, 'the last workout lands on lastDate');
+  assert.equal(new Date(s1.startedAt).getDate(), 12, 'a week earlier');
+  assert.equal(plan.layout[0].rows[0].name, 'Seated Row (cable)');
+  assert.ok(plan.layout[0].example);
 
   const row = exercises.find((e) => e.name === 'Seated Row (cable)');
   const history = plan.sessions.map((s) => ({ date: s.startedAt, sets: s.exercises.find((e) => e.exerciseId === row.id).sets }));
   assert.equal(suggest(row, history.slice(0, 1)).action, 'increase', '2 sets above 10');
 
   // importing again adds nothing
-  const again = planImport(PASTE, { locations, exercises: [...exercises, ...plan.exercises], templates: plan.templates, sessions: plan.sessions }, '2026-11-09');
+  const again = planImport(PASTE, { locations, exercises: [...exercises, ...plan.exercises], templates: plan.templates, sessions: plan.sessions }, { layout: plan.layout, lastDate: '2026-11-19' });
   assert.equal(again.sessions.length, 0);
   assert.equal(again.templates[0].id, plan.templates[0].id);
 
@@ -119,11 +125,71 @@ test('import creates templates, exercises and history; progression uses it', () 
   const exById = Object.fromEntries([...exercises, ...plan.exercises].map((e) => [e.id, e]));
   const payload = buildPayload(s1, {
     exercisesById: exById, locationsById: Object.fromEntries(locations.map((l) => [l.id, l])),
-    sessions: plan.sessions, templates: plan.templates, programStart: '2026-11-09',
+    sessions: plan.sessions, templates: plan.templates, layout: plan.layout,
   });
   assert.equal(payload.program.workout, 'Upper A');
   assert.equal(payload.program.week, 1);
   assert.equal(payload.program.duration, "40'");
   assert.equal(payload.program.rows.find((r) => r.name === 'Seated Row (cable)').log, '150 x 11, 11 | RIR 1, 0');
   assert.equal(payload.program.rows.find((r) => r.name === 'Chest Supported DB Row').log, '');
+});
+
+// One week's column, values only, as copied from the sheet (made-up numbers, real layout shape):
+// Upper 1 starts at its first filled row; "Week N" marks the next blocks' headers.
+const COLUMN = [
+  '100 x 11, 11 | RIR 1, 0', '', '120 x 9, 9 | RIR 1, 0', '', '30 x 15, 16 | RIR 1, 1', '', '80 x 14, 13 | RIR 0, 0', '25 x 15, 14 | RIR 1, 0', '',
+  'Week 7',
+  '90 x 10, 10 | RIR 2, 2', '', '', '200 x 8, 8 | RIR 2, 2', '45 x 12, 11 | RIR 1, 0', '120 x 15, 15 | RIR 1, 0', 'BW x 15, 15 | RIR 5, 5', '',
+  'Week 7',
+  '100 x 10, 9 | RIR 1, 0', '', '250 x 10, 10 | RIR 0, 0', '', '30 x 15, 18 | RIR 0, 0', '', '80 x 13, 14 | RIR 0, 0', '', '25 x 15, 14 | RIR 1, 0',
+].join('\n');
+
+test('a single week column lines up with the program rows using the h/c tags', () => {
+  const { blocks, warnings } = parseColumnPaste(COLUMN, defaultLayout());
+  assert.deepEqual(warnings, []);
+  assert.deepEqual(blocks.map((b) => [b.workout, b.week]), [['Upper 1', 7], ['Lower 1', 7], ['Upper 2', 7]]);
+  assert.deepEqual(blocks[0].values, {
+    'Seated Row (cable)': '100 x 11, 11 | RIR 1, 0',
+    'Barbell Bench Press (horizontal)': '120 x 9, 9 | RIR 1, 0',
+    'Lateral (cable)': '30 x 15, 16 | RIR 1, 1',
+    'Cable Pressdown (rope)': '80 x 14, 13 | RIR 0, 0',
+    'Standing Curl (DB / bilateral or unilateral)': '25 x 15, 14 | RIR 1, 0',
+  });
+  assert.deepEqual(Object.keys(blocks[1].values), [
+    'Split Squat (Smith Machine)', 'Deadlift (conventional)', 'Seated Leg Curl (machine)', 'Leg Extension', 'Ab Exercise of Choice']);
+  assert.deepEqual(Object.keys(blocks[2].values), [
+    'Incline Barbell Press (15-30°)', 'Cable Pull-Downs (neutral grip)', 'Lateral (cable)', 'Cable Pressdown (rope)',
+    'Standing Curl (DB / bilateral or unilateral)']);
+});
+
+test('importing a week column: history at Home, dated back from the last workout, next week follows', () => {
+  const locations = seedLocations();
+  const exercises = seedExercises();
+  const plan = planImport(COLUMN, { locations, exercises, templates: [], sessions: [] }, { layout: defaultLayout(), lastDate: '2026-11-19' });
+  assert.equal(plan.mode, 'column');
+  assert.deepEqual(plan.warnings, []);
+  assert.equal(plan.sessions.length, 3);
+  assert.ok(plan.sessions.every((s) => s.locationId === locations[0].id && s.week === 7));
+  assert.deepEqual(plan.sessions.map((s) => new Date(s.startedAt).getDate()), [15, 17, 19]);
+  assert.equal(nextWeek('Upper 1', plan.sessions), 8);
+  const ab = plan.sessions[1].exercises.at(-1);
+  assert.equal(formatLog(ab.sets, true), 'BW x 15, 15 | RIR 5, 5');
+
+  // the layout keeps the sheet's row order for the export
+  const rows = programRows({
+    workout: 'Upper 1', templates: seedTemplates(locations, exercises), locations,
+    exercisesById: Object.fromEntries(exercises.map((e) => [e.id, e])), layout: defaultLayout(),
+  });
+  assert.deepEqual(rows.slice(0, 2).map((r) => [r.tag, r.name]), [['c', 'Chest Supported DB Row'], ['h', 'Seated Row (cable)']]);
+  assert.equal(rows.length, 9);
+});
+
+test('a column without a "Week N" line asks for the week', () => {
+  const plan = planImport('BW x 15, 15', { locations: seedLocations(), exercises: seedExercises(), templates: [], sessions: [] },
+    { layout: [{ name: 'Core', rows: [{ tag: 'hc', name: 'Ab Exercise of Choice' }] }], lastDate: '2026-11-19' });
+  assert.equal(plan.missingWeek, true);
+  assert.equal(plan.sessions.length, 0);
+  const plan2 = planImport('BW x 15, 15', { locations: seedLocations(), exercises: seedExercises(), templates: [], sessions: [] },
+    { layout: [{ name: 'Core', rows: [{ tag: 'hc', name: 'Ab Exercise of Choice' }] }], lastDate: '2026-11-19', week: 3 });
+  assert.equal(plan2.sessions[0].week, 3);
 });

@@ -80,6 +80,7 @@ function SessionHeader({ s, loc, onFinish, update }) {
         <select class="sh-loc" aria-label="Location" value=${s.locationId || ''} onChange=${(e) => update({ ...s, locationId: e.target.value })}>
           ${state.locations.map((l) => html`<option value=${l.id}>${l.name}</option>`)}
         </select>
+        <label class="wk">Wk <${NumInput} value=${s.week} label="Week" onChange=${(v) => v && update({ ...s, week: v }, 300)} /></label>
         <span>· ${done} sets</span>
         ${s.lastSetAt && html`<span>· last set ${fmtClock((now - s.lastSetAt) / 1000)} ago</span>`}
       </div>
